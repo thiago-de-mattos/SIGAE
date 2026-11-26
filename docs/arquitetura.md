@@ -10,7 +10,8 @@ Não representa a implementação completa do sistema.
   em `atendimentos/contratos.py` (Protocols do Python).
 - Planejados: `Medico`, `Atendimento`, `SistemaAtendimento`, `TabelaHash`,
   `MinHeap` e `ArvoreRubroNegra`.
-- Estado entre requisições: detalhamento e implementação na SIGAE-10.
+- Estado entre requisições: estratégia documentada na SIGAE-10 abaixo;
+  implementação futura.
 - Integração e recuperação de falhas: SIGAE-19 e SIGAE-20.
 
 Um Protocol descreve métodos e tipos para análise estática. Não implementa
@@ -35,7 +36,97 @@ explícita. Os testes das implementações deverão comprovar os comportamentos.
 As views não alteram entidades ou índices diretamente. O serviço controla
 as operações completas. Domínio e estruturas não importam views, formulários
 ou modelos do Django. O serviço não é recriado com filas vazias a cada requisição;
-a forma de manter sua instância e eventual persistência será definida na SIGAE-10.
+a instância segue a estratégia em memória da SIGAE-10 abaixo, sem persistência.
+
+## SIGAE-10 — Estado em memória e acesso entre requisições
+
+### Ciclo de vida e acesso pelas views
+
+O sistema executará em um único processo servidor, com uma instância de
+`SistemaAtendimento` compartilhada por todas as requisições e usuários desse
+processo. O estado não pertence à sessão de navegador nem à instância de uma view.
+Um provedor futuro em `atendimentos/services/estado.py` oferecerá
+`obter_sistema()`, criando a instância uma única vez, sob lock de inicialização,
+e retornando sempre a mesma referência. A instância só será publicada depois
+de sua construção completa; falha de inicialização não publicará estado parcial.
+
+As views importarão esse provedor, obterão o serviço e chamarão suas operações.
+Não construirão serviços por requisição nem acessarão diretamente as estruturas.
+O serviço manterá um `threading.RLock` único para proteger leituras e alterações;
+métodos compostos manterão esse lock durante toda a operação, inclusive rollback.
+A reentrância permite chamadas internas protegidas sem adquirir um segundo lock
+para o mesmo estado. O lock de inicialização não será usado nas operações de negócio.
+
+Para renderização, o serviço oferecerá um contexto de leitura protegido pelo
+mesmo lock. Dentro dele, a view consultará os métodos existentes e materializará
+os campos necessários em valores de apresentação, sem guardar referências
+mutáveis para leitura posterior. A renderização ocorrerá após liberar o lock.
+As listas retornadas pelas estruturas continuam contendo referências, conforme
+os contratos; copiar apenas a lista não constitui uma fotografia dos seus campos.
+Valores auxiliares de apresentação não serão cadastros nem índices alternativos.
+
+Durante a execução, preservar cadastros, atendimentos ativos e históricos,
+referências compartilhadas, índices, geradores de IDs, contadores de conclusões
+e última atribuição dos médicos. Concluir ou cancelar não apaga o cadastro ou
+histórico. IDs serão gerados sob o lock, serão crescentes e não serão reutilizados
+durante essa execução; reservas em operações que falhem poderão deixar lacunas.
+Contadores médicos só mudam pelas regras de conclusão e não reiniciam entre
+requisições, acessos de usuários ou novas sessões de navegador.
+
+### Operações compostas e rollback
+
+Cadastro, reclassificação, chamada, conclusão e cancelamento deverão seguir:
+
+1. Adquirir o lock do serviço e validar entradas, existência, estados e
+   disponibilidade antes de alterar registros. Sem médico ou paciente elegível,
+   encerrar com o erro previsto, sem retirar itens das filas.
+2. Registrar os valores anteriores das entidades afetadas, vínculos e presença
+   nos índices, e preparar as compensações antes das mutações. Usar um registro
+   temporário de recuperação, com listas/tuplas e referências originais,
+   justificado exclusivamente pelo rollback, sem substituir estruturas próprias.
+3. Aplicar a operação completa sob o mesmo lock, registrando as etapas concluídas.
+   Só devolver sucesso quando estados, vínculos, contadores e índices forem
+   consistentes. Nenhuma outra requisição poderá observar etapas intermediárias.
+4. Em falha, compensar as etapas em ordem inversa, restaurar valores nas mesmas
+   instâncias e recompor os índices com essas referências. Na reclassificação,
+   restaurar a prioridade e reorganizar o Heap; na conclusão, restaurar também
+   contador, disponibilidade, atendimento e vínculos. IDs reservados permanecem
+   consumidos, sem registros parciais associados a eles.
+5. Conferir os invariantes após a recuperação antes de liberar o acesso normal.
+   Se o rollback falhar, marcar o serviço como indisponível sob o lock e rejeitar
+   novas operações e consultas de negócio; não continuar usando estado incerto
+   nem apresentar sucesso. Registrar a falha para diagnóstico.
+
+O lock impede interferência concorrente, mas não desfaz alterações sozinho.
+As implementações futuras das estruturas deverão garantir que falhas em uma
+mutação sejam recuperáveis, inclusive quando ocorram antes de o método retornar.
+Os Protocols atuais não oferecem transações nem restauração de entidades.
+A implementação do mecanismo interno de recuperação ficará na integração
+SIGAE-19/SIGAE-20, sem alterar agora as assinaturas públicas. Restaurar estado
+não significa executar transições de negócio proibidas nem substituir entidades
+por cópias independentes. Testes futuros deverão injetar falhas entre etapas e
+verificar invariantes, identidade das referências e comportamento concorrente.
+
+### Limitações e compatibilidade
+
+- Reinício, encerramento ou falha do processo perde todo o estado em memória,
+  inclusive histórico, IDs e contadores. A próxima execução começa vazia, com
+  geradores reinicializados; não há garantia de unicidade entre execuções.
+- Múltiplos workers, processos ou réplicas não são suportados: cada um teria
+  serviço, filas e IDs independentes. O lock protege apenas threads do mesmo
+  processo e não sincroniza essas cópias.
+- O autoreload de desenvolvimento reinicia o processo e perde o estado. Para
+  sessões de demonstração contínuas, executar com autoreload desativado
+  (`python manage.py runserver --noreload`). Isso não fornece persistência.
+- Um lock único serializa operações e pode limitar a vazão; evitar renderização
+  e I/O demorado dentro da região protegida. Os históricos crescem na memória.
+- A estratégia é compatível com o escopo, que torna banco opcional, e preserva
+  domínio independente do Django, estruturas próprias, contratos e coordenação
+  centralizada. Persistência e distribuição entre processos exigiriam outra
+  estratégia futura e não fazem parte desta entrega.
+
+A SIGAE-10 documenta essas decisões; não implementa o provedor, locks, serviço,
+estruturas, rollback ou persistência, nem declara comprovados seus testes futuros.
 
 ## Entidades
 
