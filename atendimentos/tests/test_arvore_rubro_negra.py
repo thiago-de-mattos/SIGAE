@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from random import Random
 from unittest import TestCase
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from atendimentos.domain.paciente import Paciente
 from atendimentos.structures.arvore_rubro_negra import ArvoreRubroNegra
@@ -176,3 +177,18 @@ class ArvoreRubroNegraTests(TestCase):
         primeira.remover((CHEGADA, 1))
         self.assertEqual(len(segunda), 1)
         segunda.validar()
+
+    def test_chave_local_na_hora_repetida_e_comparada_pelo_instante_real(self):
+        fuso = ZoneInfo("America/New_York")
+        cedo = datetime(2026, 11, 1, 1, 30, tzinfo=fuso)
+        tarde = cedo.replace(fold=1)
+        paciente = Paciente(1, "Ana", tarde, 1)
+        arvore = ArvoreRubroNegra()
+
+        with self.assertRaisesRegex(ValueError, "divergente"):
+            arvore.inserir((cedo, paciente.id), paciente)
+        arvore.inserir((tarde, paciente.id), paciente)
+        self.assertIsNone(arvore.buscar((cedo, paciente.id)))
+        self.assertIs(arvore.buscar((tarde, paciente.id)), paciente)
+        self.assertIs(arvore.remover((tarde, paciente.id)), paciente)
+        arvore.validar()

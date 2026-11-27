@@ -291,8 +291,7 @@ class SistemaAtendimento:
     def _horario_encerramento(fim, inicio):
         if fim is None:
             fim = datetime.now(timezone.utc)
-        Atendimento._validar_horario(fim)
-        if fim < inicio:
+        if Atendimento._validar_horario(fim) < inicio:
             raise ValueError("O encerramento não pode anteceder o início.")
         return fim
 
@@ -328,7 +327,7 @@ class SistemaAtendimento:
         if (self._pacientes.buscar(paciente.id) is not paciente
                 or self._medicos.buscar(medico.id) is not medico):
             raise ValueError("Referências incompatíveis nos cadastros.")
-        fim = self._horario_encerramento(fim, atendimento.inicio)
+        fim = self._horario_encerramento(fim, atendimento.chave_inicio[0])
         # Apenas valores para restauração; mantém as referências originais.
         anterior = (atendimento.situacao, atendimento.fim, paciente.situacao,
                     medico.situacao, medico.total_concluidos, medico.ultima_atribuicao)
@@ -393,7 +392,7 @@ class SistemaAtendimento:
             return paciente
         if paciente.situacao != SituacaoPaciente.AGUARDANDO:
             raise ValueError("Somente pacientes aguardando ou em atendimento podem ser cancelados.")
-        self._horario_encerramento(fim, paciente.chegada)
+        self._horario_encerramento(fim, paciente.chave_chegada[0])
         if self._arvore_espera.buscar(paciente.chave_chegada) is not paciente:
             raise ValueError("Paciente ausente do índice cronológico.")
         anterior = paciente.situacao
@@ -461,7 +460,7 @@ class SistemaAtendimento:
         """
         encerrados = [a for a in self._atendimentos.listar_valores()
                       if a.situacao != SituacaoAtendimento.EM_ATENDIMENTO]
-        return sorted(encerrados, key=lambda a: (a.inicio, a.id))
+        return sorted(encerrados, key=lambda a: a.chave_inicio)
 
     @sincronizado
     def listar_chegadas(self) -> list[Paciente]:
