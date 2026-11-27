@@ -108,6 +108,7 @@ class TabelaHashTests(TestCase):
                     if chave == removida:
                         self.assertIs(tabela.remover(chave), valor)
                 self.assertEqual(len(tabela), 2)
+                self.assertIsNone(tabela.validar())
                 self.assertIsNone(tabela.buscar(removida))
                 for chave, valor in registros:
                     if chave != removida:
@@ -211,6 +212,7 @@ class TabelaHashTests(TestCase):
         for quantidade, (chave, valor) in enumerate(registros, start=1):
             tabela.inserir(chave, valor)
             self.assertEqual(len(tabela), quantidade)
+            self.assertIsNone(tabela.validar())
             self.assertLessEqual(quantidade / tabela._capacidade, 0.75)
             if tabela._capacidade != capacidades[-1]:
                 capacidades.append(tabela._capacidade)
@@ -228,3 +230,92 @@ class TabelaHashTests(TestCase):
         self.assertEqual(tabela._capacidade, capacidade)
         for chave, valor in registros[1::2]:
             self.assertIs(tabela.buscar(chave), valor)
+        self.assertIsNone(tabela.validar())
+
+    def test_validar_preserva_organizacao_e_referencias(self):
+        tabela = TabelaHash[object](capacidade=4, fator_carga_maximo=1)
+        self.assertIsNone(tabela.validar())
+        valor = []
+        for chave in (9, 1, -3, 0):
+            tabela.inserir(chave, valor)
+        buckets = tabela._buckets
+        referencias = list(buckets)
+        registros = [list(bucket) for bucket in buckets]
+        self.assertIsNone(tabela.validar())
+        self.assertIs(tabela._buckets, buckets)
+        for indice, bucket in enumerate(buckets):
+            self.assertIs(bucket, referencias[indice])
+            for atual, anterior in zip(bucket, registros[indice]):
+                self.assertIs(atual, anterior)
+        tabela.atualizar(1, valor)
+        self.assertIsNone(tabela.validar())
+        for chave in (9, 1, -3, 0):
+            self.assertIs(tabela.remover(chave), valor)
+            self.assertIsNone(tabela.validar())
+
+    def test_validar_detecta_metadados_invalidos(self):
+        casos = (
+            ("_capacidade", (0, -1, True, 1.5, None, 12)),
+            ("_quantidade", (-1, True, 1.0, None, 1)),
+            ("_fator_carga_maximo", (0, -1, True, "0.75", None,
+                                      float("nan"), float("inf"))),
+        )
+        for atributo, valores in casos:
+            for valor in valores:
+                with self.subTest(atributo=atributo, valor=valor):
+                    tabela = TabelaHash()
+                    setattr(tabela, atributo, valor)
+                    with self.assertRaises(ValueError):
+                        tabela.validar()
+
+    def test_validar_detecta_organizacao_invalida(self):
+        for buckets in (None, (), [], [[]] * 11, [()] + [[] for _ in range(10)]):
+            with self.subTest(buckets=buckets):
+                tabela = TabelaHash()
+                tabela._buckets = buckets
+                with self.assertRaises(ValueError):
+                    tabela.validar()
+
+    def test_validar_detecta_registros_invalidos(self):
+        for registro in (None, (), (1,), (1, 2, 3), [1, 2],
+                         (True, 2), (1.0, 2), ("1", 2), (1, None)):
+            with self.subTest(registro=registro):
+                tabela = TabelaHash()
+                tabela._buckets[1].append(registro)
+                tabela._quantidade = 1
+                with self.assertRaises(ValueError):
+                    tabela.validar()
+
+    def test_validar_detecta_bucket_incorreto(self):
+        tabela = TabelaHash()
+        tabela.inserir(1, object())
+        tabela._buckets[2].append(tabela._buckets[1].pop())
+        with self.assertRaisesRegex(ValueError, "bucket incorreto"):
+            tabela.validar()
+
+    def test_validar_detecta_duplicacao_com_contagem_coerente(self):
+        tabela = TabelaHash()
+        tabela.inserir(1, object())
+        tabela._buckets[1].append((1, object()))
+        tabela._quantidade = 2
+        with self.assertRaisesRegex(ValueError, "duplicada"):
+            tabela.validar()
+
+    def test_validar_detecta_contagem_divergente(self):
+        for quantidade in (0, 2):
+            with self.subTest(quantidade=quantidade):
+                tabela = TabelaHash()
+                tabela.inserir(1, object())
+                tabela._quantidade = quantidade
+                with self.assertRaisesRegex(ValueError, "diverge"):
+                    tabela.validar()
+
+    def test_validar_detecta_carga_excedida(self):
+        tabela = TabelaHash(capacidade=4)
+        for chave in range(3):
+            tabela.inserir(chave, object())
+        self.assertIsNone(tabela.validar())
+        tabela._buckets[3].append((3, object()))
+        tabela._quantidade = 4
+        with self.assertRaisesRegex(ValueError, "excedido"):
+            tabela.validar()

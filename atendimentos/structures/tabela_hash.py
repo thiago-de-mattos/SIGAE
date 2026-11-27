@@ -11,7 +11,19 @@ class TabelaHash(Generic[Valor]):
 
     As listas são o armazenamento dos buckets, não um índice pronto.
     Cresce por duplicação ao ultrapassar o fator de carga máximo; não encolhe.
-    A validação estrutural completa (validar) fica para SIGAE-16.
+    Implementa as operações de ContratoHash por compatibilidade estrutural.
+
+    Complexidades (n registros, m buckets, dispersão uniforme e fator fixo):
+    buscar/atualizar/remover: O(1 + n/m) esperado, O(n) no pior caso.
+    inserir: O(1) esperado amortizado; uma expansão custa O(m + m_novo + n),
+    assim como seu pior caso, incluindo colisões. Sem expansão: O(n) no pior
+    caso. Com crescimento usual e fator fixo, a expansão custa O(n).
+    Construção: O(m); len: O(1); listar_valores: O(m + n), espaço extra O(n).
+    validar: O(m log(m + 1) + n log(n + 1)) como limite esperado e de pior
+    caso, sem amortização; espaço extra O(m + n). Ordena somente listas
+    auxiliares de IDs dos buckets e chaves para detectar repetições, sem
+    substituir o índice próprio nem alterar os buckets ou objetos armazenados.
+    Espaço da tabela: O(m + n). Como não encolhe, m pode superar n após remoções.
     """
 
     def __init__(
@@ -106,3 +118,46 @@ class TabelaHash(Generic[Valor]):
 
     def __len__(self) -> int:
         return self._quantidade
+
+    def validar(self) -> None:
+        """Confere os invariantes sem modificar a tabela; erro gera ValueError."""
+        if type(self._capacidade) is not int or self._capacidade <= 0:
+            raise ValueError("Capacidade inválida.")
+        if (
+            type(self._fator_carga_maximo) not in (int, float)
+            or not 0 < self._fator_carga_maximo < float("inf")
+        ):
+            raise ValueError("Fator de carga máximo inválido.")
+        if type(self._quantidade) is not int or self._quantidade < 0:
+            raise ValueError("Quantidade inválida.")
+        if type(self._buckets) is not list or len(self._buckets) != self._capacidade:
+            raise ValueError("Buckets incompatíveis com a capacidade.")
+
+        identidades = []
+        chaves = []
+        for indice, bucket in enumerate(self._buckets):
+            if type(bucket) is not list:
+                raise ValueError("Bucket deve ser uma lista.")
+            identidades.append(id(bucket))
+            for registro in bucket:
+                if type(registro) is not tuple or len(registro) != 2:
+                    raise ValueError("Registro deve ser um par (chave, valor).")
+                chave, valor = registro
+                if type(chave) is not int or chave % self._capacidade != indice:
+                    raise ValueError("Chave inválida ou armazenada no bucket incorreto.")
+                if valor is None:
+                    raise ValueError("None não é um valor armazenável.")
+                chaves.append(chave)
+
+        identidades.sort()
+        for posicao in range(1, len(identidades)):
+            if identidades[posicao] == identidades[posicao - 1]:
+                raise ValueError("Buckets não podem compartilhar a mesma lista.")
+        chaves.sort()
+        for posicao in range(1, len(chaves)):
+            if chaves[posicao] == chaves[posicao - 1]:
+                raise ValueError("Chave duplicada.")
+        if len(chaves) != self._quantidade:
+            raise ValueError("Quantidade armazenada diverge dos registros.")
+        if self._quantidade / self._capacidade > self._fator_carga_maximo:
+            raise ValueError("Fator de carga máximo excedido.")
