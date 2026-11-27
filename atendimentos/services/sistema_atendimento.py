@@ -11,7 +11,7 @@ from atendimentos.structures.tabela_hash import TabelaHash
 
 
 class SistemaAtendimento:
-    """Base e operações das etapas SIGAE-19.3 a SIGAE-19.7.
+    """Base e operações das etapas SIGAE-19.3 a SIGAE-19.8.
 
     Estruturas são internas: as views não devem acessá-las diretamente.
     IDs são únicos por tipo e por instância, reservados em sequência a partir
@@ -384,5 +384,81 @@ class SistemaAtendimento:
         return self._medicos.listar_valores()
 
     def listar_fila(self) -> list[Paciente]:
-        """Pacientes aguardando por chegada e ID, pelo percurso da árvore."""
+        """Espera por chegada e ID via árvore; tempo e espaço O(n), n em espera."""
         return self._arvore_espera.em_ordem()
+
+    def consultar_proximo_paciente(self) -> Paciente | None:
+        """Referência ao mínimo clínico, ou None; tempo e espaço O(1)."""
+        return self._heap_pacientes.consultar_minimo()
+
+    def consultar_proximo_medico(self) -> Medico | None:
+        """Referência ao médico elegível mínimo, ou None; tempo e espaço O(1)."""
+        return self._heap_medicos.consultar_minimo()
+
+    def listar_atendimentos_ativos(self) -> list[Atendimento]:
+        """Referências aos ativos, sem ordem garantida.
+
+        Para A atendimentos e B buckets: tempo O(B+A), espaço O(A).
+        """
+        return [a for a in self._atendimentos.listar_valores()
+                if a.situacao == SituacaoAtendimento.EM_ATENDIMENTO]
+
+    def listar_historico(self) -> list[Atendimento]:
+        """Encerrados por (início, ID), conforme a arquitetura.
+
+        As referências expõem ID, paciente, médico, situação, início e fim.
+        Ativos são consultados em listar_atendimentos_ativos. Cancelamento na
+        espera não cria registro aqui. Ordena apenas uma lista de apresentação.
+        Para A atendimentos, B buckets e H encerrados: tempo
+        O(B+A+H log(H+1)), espaço O(A+H), inclusive no pior caso.
+        """
+        encerrados = [a for a in self._atendimentos.listar_valores()
+                      if a.situacao != SituacaoAtendimento.EM_ATENDIMENTO]
+        return sorted(encerrados, key=lambda a: (a.inicio, a.id))
+
+    def listar_chegadas(self) -> list[Paciente]:
+        """Todos os estados por (chegada, ID), preservando referências.
+
+        Para P pacientes e B buckets: tempo O(B+P log(P+1)), espaço O(P).
+        Ordenação auxiliar de apresentação; a fila atual continua na árvore.
+        """
+        return sorted(self.listar_pacientes(), key=lambda p: p.chave_chegada)
+
+    def obter_indicadores(self) -> dict:
+        """Agregação nova a cada consulta, sem caches ou contadores adicionais.
+
+        Dicionários de estados (tamanho fixo), campos e linhas por médico são
+        exclusivamente saída de apresentação; não são índices por ID. A lista
+        por médico não tem ordem garantida e inclui médicos com zero conclusões.
+        Usa o contador real da entidade, mantido pela operação de conclusão.
+        Pacientes cancelados na espera contam somente nos estados de pacientes.
+
+        Para P pacientes, M médicos, A atendimentos e B soma dos buckets das
+        três Hashes: tempo O(B+P+M+A), espaço O(P+M+A), no pior caso também.
+        As referências retornadas são vivas; estas consultas não oferecem uma
+        fotografia protegida contra concorrência (responsabilidade da SIGAE-20).
+        """
+        pacientes = self.listar_pacientes()
+        medicos = self.listar_medicos()
+        atendimentos = self._atendimentos.listar_valores()
+        por_paciente = {estado.value: 0 for estado in SituacaoPaciente}
+        por_medico = {estado.value: 0 for estado in SituacaoMedico}
+        por_atendimento = {estado.value: 0 for estado in SituacaoAtendimento}
+        for paciente in pacientes:
+            por_paciente[paciente.situacao.value] += 1
+        for medico in medicos:
+            por_medico[medico.situacao.value] += 1
+        for atendimento in atendimentos:
+            por_atendimento[atendimento.situacao.value] += 1
+        return {
+            "total_pacientes": len(pacientes),
+            "pacientes_por_estado": por_paciente,
+            "total_medicos": len(medicos),
+            "medicos_por_estado": por_medico,
+            "conclusoes_por_medico": [
+                {"medico": medico, "total_concluidos": medico.total_concluidos}
+                for medico in medicos
+            ],
+            "total_atendimentos": len(atendimentos),
+            "atendimentos_por_estado": por_atendimento,
+        }
