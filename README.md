@@ -9,23 +9,32 @@ Utilize exclusivamente dados fictícios.
 
 Estão implementados:
 
-- Entidade `Paciente`, com validações, estados, transições e chaves de ordenação.
+- Entidades `Paciente`, `Medico` e `Atendimento`, com validações, estados,
+  transições e preservação de referências.
 - Tabela Hash própria, com encadeamento separado, remoção, atualização,
   redimensionamento e validação estrutural.
 - Min-Heap binário próprio, configurável para pacientes ou médicos, com Hash
   própria de posições, atualização, remoção e validação.
 - Árvore Rubro-Negra própria, com inserção, busca, remoção, balanceamento,
   percurso em ordem e validação.
+- Serviço `SistemaAtendimento` em memória, com IDs independentes por entidade,
+  cadastro, consultas, triagem pela prioridade no cadastro, reclassificação,
+  chamada e distribuição médica, conclusão, cancelamento, históricos e indicadores.
+  Coordena as estruturas próprias e preserva as referências compartilhadas.
 - Seis protótipos navegáveis com dados fictícios estáticos e testes de interface.
 
 Os protótipos apenas apresentam telas. Cadastro, consulta de registros, triagem,
-chamada, conclusão e cancelamento não são executados: os controles de operação
+chamada, conclusão e cancelamento não são executados pela interface: os controles de operação
 estão desabilitados. As views aceitam somente GET e não acessam os índices.
 
-Ainda serão implementados `Medico`, `Atendimento`, o serviço central e a integração
-entre interface, estados e estruturas. O estado compartilhado, os locks e o
-rollback estão documentados, mas não implementados. A revisão dos protótipos pela
-equipe e a avaliação visual e com leitor de tela permanecem pendentes.
+O serviço está implementado para execução sequencial em memória, com compensação
+local em cadastros, reclassificação, chamada e encerramentos. Falhas de recuperação
+são propagadas explicitamente; ainda não tornam o serviço indisponível.
+
+A SIGAE-20 tratará a instância compartilhada entre requisições, concorrência,
+locks, rollback centralizado e indisponibilidade após falha de recuperação.
+A integração WEB e a revisão dos protótipos pela equipe, incluindo avaliação
+visual e com leitor de tela, permanecem pendentes.
 
 ## Pré-requisitos
 
@@ -103,8 +112,8 @@ python manage.py runserver --noreload
 ```
 
 Abra `http://127.0.0.1:8000/`. A opção `--noreload` evita reinícios automáticos;
-a estratégia de estado em memória prevista para a integração perderá os registros
-a cada reinício. Atualmente, as telas sempre exibem o mesmo conjunto estático.
+os registros do serviço em memória são perdidos a cada reinício. O serviço ainda
+não é compartilhado entre requisições nem acessado pelas views. Atualmente, as telas sempre exibem o mesmo conjunto estático.
 
 | URL | Tela |
 | --- | --- |
@@ -135,6 +144,15 @@ python manage.py test atendimentos.tests.test_tabela_hash
 python manage.py test atendimentos.tests.test_min_heap
 python manage.py test atendimentos.tests.test_arvore_rubro_negra
 python manage.py test atendimentos.tests.test_views
+python manage.py test atendimentos.tests.test_medico
+python manage.py test atendimentos.tests.test_atendimento
+python manage.py test atendimentos.tests.test_sistema_atendimento
+python manage.py test atendimentos.tests.test_cadastros
+python manage.py test atendimentos.tests.test_reclassificacao
+python manage.py test atendimentos.tests.test_chamada
+python manage.py test atendimentos.tests.test_encerramento
+python manage.py test atendimentos.tests.test_indicadores
+python manage.py test atendimentos.tests.test_integracao_servico
 ```
 
 Verificações complementares:
@@ -144,14 +162,16 @@ python manage.py check
 git diff --check
 ```
 
-Na auditoria da versão `9aaaed4`, os 70 testes passaram: 16 de Paciente, 27 da
-Hash, 12 do Heap, 10 da árvore e 5 de views. Esse resultado não comprova operações
-integradas de atendimento nem substitui a revisão visual dos protótipos.
+Na conclusão da SIGAE-19, os 160 testes foram aprovados: entidades, estruturas,
+serviço e protótipos WEB. A SIGAE-19.9 acrescentou três cenários integrados aos
+157 testes anteriores, verificando fluxo completo, distribuição, referências,
+invariantes, colisões, redimensionamentos e recuperação de falhas. Esse resultado
+não comprova concorrência nem integração WEB e não substitui a revisão visual.
 
 ## Documentação
 
 - [Escopo oficial](docs/escopo.md): requisitos obrigatórios, opcionais e entregáveis.
 - [Arquitetura](docs/arquitetura.md): responsabilidades, contratos, estruturas e
-  estratégia futura de estado em memória.
+  serviço em memória e estratégia futura de compartilhamento entre requisições.
 - [Protótipos](docs/prototipos.md): telas, fluxos, dados demonstrativos e limitações.
 - [Contratos das estruturas](atendimentos/contratos.py): interfaces públicas.
