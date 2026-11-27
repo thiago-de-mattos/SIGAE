@@ -1,6 +1,16 @@
 {% extends "atendimentos/base.html" %}
-{% block title %}Painel geral{% endblock %}
+{% block title %}Painel geral · SIGAE WEB{% endblock %}
 {% block content %}
-<section class="apresentacao"><p class="etiqueta">Protótipos navegáveis · SIGAE-12</p><h1>Painel geral</h1><p>Visão ilustrativa da espera, da equipe e dos atendimentos.</p></section>
-<ul class="modulos indicadores"><li><strong>3</strong><span>Aguardando</span></li><li><strong>1</strong><span>Em atendimento</span></li><li><strong>1</strong><span>Concluído</span></li><li><strong>1</strong><span>Cancelado</span></li></ul><p>6 pacientes · 2 médicos disponíveis · 1 atendimento ativo.</p><div class="tabela" role="region" aria-label="Atendimentos por médico — demonstração" tabindex="0"><table><caption>Atendimentos por médico — demonstração</caption><thead><tr><th scope="col">Médico</th><th scope="col">Concluídos</th><th scope="col">Cancelados</th><th scope="col">Em atendimento</th></tr></thead><tbody><tr><td>Lia Prado</td><td>1</td><td>0</td><td>0</td></tr><tr><td>Rui Paiva</td><td>0</td><td>0</td><td>1</td></tr><tr><td>Nina Vale</td><td>0</td><td>1</td><td>0</td></tr></tbody></table></div><div class="tabela" role="region" aria-label="Chegadas em ordem cronológica — 26/11/2026" tabindex="0"><table><caption>Chegadas em ordem cronológica — 26/11/2026</caption><thead><tr><th scope="col">ID</th><th scope="col">Paciente</th><th scope="col">Chegada (UTC−03:00)</th><th scope="col">Estado</th></tr></thead><tbody><tr><td>101</td><td>Ana Lima</td><td>08:00</td><td>Concluído</td></tr><tr><td>102</td><td>Bruno Reis</td><td>08:10</td><td>Cancelado</td></tr><tr><td>103</td><td>Carla Luz</td><td>08:20</td><td>Em atendimento</td></tr><tr><td>104</td><td>Diego Melo</td><td>08:30</td><td>Aguardando</td></tr><tr><td>105</td><td>Eva Costa</td><td>08:35</td><td>Aguardando</td></tr><tr><td>106</td><td>Fábio Alves</td><td>08:40</td><td>Aguardando</td></tr></tbody></table></div><section><h2>Acessar módulos</h2><ul class="modulos"><li><a href="{% url 'atendimentos:pacientes' %}">Pacientes</a></li><li><a href="{% url 'atendimentos:triagem' %}">Triagem/Fila</a></li><li><a href="{% url 'atendimentos:medicos' %}">Médicos</a></li><li><a href="{% url 'atendimentos:atendimentos' %}">Atendimentos</a></li><li><a href="{% url 'atendimentos:historico' %}">Histórico</a></li></ul></section><section class="exemplos"><h2>Estados alternativos — exemplos estáticos</h2><details><summary>Visualizar estado vazio</summary><p class="vazio">Nenhum paciente ou atendimento registrado. Os indicadores serão apresentados com valor zero.</p></details><details><summary>Visualizar mensagens de erro</summary><div class="erro"><strong>Exemplos; nenhum erro real foi provocado.</strong><ul><li>Não foi possível carregar os indicadores. Tente novamente; não apresente dados incompletos como atuais.</li></ul></div></details></section>
+<h1>Painel geral</h1>
+<h2>Pacientes por situação</h2>
+<ul class="modulos indicadores">
+    {% for situacao, total in estados_pacientes %}<li><strong>{{ total }}</strong><span>{{ situacao }}</span></li>{% endfor %}
+</ul>
+<h2>Médicos por situação</h2>
+<ul class="modulos indicadores">
+    {% for situacao, total in estados_medicos %}<li><strong>{{ total }}</strong><span>{{ situacao }}</span></li>{% endfor %}
+</ul>
+{% include "atendimentos/partes/conclusoes.html" %}
+{% include "atendimentos/partes/pacientes.html" with linhas=chegadas titulo="Chegadas por ordem cronológica" only %}
 {% endblock %}
+

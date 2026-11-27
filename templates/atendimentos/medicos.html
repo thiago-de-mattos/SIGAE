@@ -1,6 +1,38 @@
 {% extends "atendimentos/base.html" %}
-{% block title %}Médicos{% endblock %}
+{% block title %}Médicos · SIGAE WEB{% endblock %}
 {% block content %}
-<section class="apresentacao"><p class="etiqueta">Protótipos navegáveis · SIGAE-12</p><h1>Médicos</h1><p>Disponibilidade e distribuição de atendimentos, sem alterações reais.</p></section>
-<section class="cartao"><h2>Cadastrar médico — modelo de formulário</h2><p>ID automático. Cadastro futuro inicia Disponível, com zero conclusões e nenhuma atribuição.</p><fieldset disabled><legend>Dados fictícios do médico</legend><label for="nome-medico">Nome (obrigatório)</label><input id="nome-medico" type="text"><label for="registro">Registro fictício (obrigatório)</label><input id="registro" type="text" placeholder="FICT-004"><button type="button" disabled>Cadastrar médico</button></fieldset><h2>Consultar médico</h2><label for="busca-medico">ID do médico</label><input id="busca-medico" type="number" min="1" disabled><button type="button" disabled>Consultar</button></section><div class="tabela" role="region" aria-label="Equipe demonstrativa — última atribuição em 26/11/2026" tabindex="0"><table><caption>Equipe demonstrativa — última atribuição em 26/11/2026</caption><thead><tr><th scope="col">ID</th><th scope="col">Nome</th><th scope="col">Registro fictício</th><th scope="col">Disponibilidade</th><th scope="col">Conclusões</th><th scope="col">Última atribuição (UTC−03:00)</th></tr></thead><tbody><tr><td>1</td><td>Lia Prado</td><td>FICT-001</td><td>Disponível</td><td>1</td><td>08:05</td></tr><tr><td>2</td><td>Rui Paiva</td><td>FICT-002</td><td>Em atendimento</td><td>0</td><td>08:25</td></tr><tr><td>3</td><td>Nina Vale</td><td>FICT-003</td><td>Disponível</td><td>0</td><td>08:15</td></tr></tbody></table></div><p>Conclusões incrementam o contador e liberam o médico; cancelamentos liberam sem incrementar. Os contadores devem ser preservados durante a execução do sistema.</p><section class="exemplos"><h2>Estados alternativos — exemplos estáticos</h2><details><summary>Visualizar estado vazio</summary><p class="vazio">Nenhum médico cadastrado. Cadastre um médico antes de chamar pacientes.</p></details><details><summary>Visualizar mensagens de erro</summary><div class="erro"><strong>Exemplos; nenhum erro real foi provocado.</strong><ul><li>Informe o nome e o registro fictício.</li><li>Médico não encontrado para o ID informado.</li><li>Médico ocupado não pode receber outro paciente.</li></ul></div></details></section>
+<h1>Médicos</h1>
+<div class="grade">
+    <section class="cartao">
+        <h2>Cadastrar médico</h2>
+        <form method="post" action="{% url 'atendimentos:acao' 'medicos' 'cadastrar' %}">
+            {% csrf_token %}{{ cadastro.as_div }}
+            <button>Cadastrar médico</button>
+        </form>
+    </section>
+    <section class="cartao">
+        <h2>Consultar médico</h2>
+        <form method="get" action="{% url 'atendimentos:medicos' %}">
+            {{ busca.as_div }}
+            <button>Consultar médico</button>
+        </form>
+        {% if resultado %}
+        <p><strong>{{ resultado.nome }}</strong> · ID {{ resultado.id }} · {{ resultado.registro }}</p>
+        <p>{{ resultado.situacao }} · {{ resultado.total }} atendimento{{ resultado.total|pluralize }} concluído{{ resultado.total|pluralize }}</p>
+        {% endif %}
+    </section>
+</div>
+<div class="tabela" role="region" aria-label="Médicos cadastrados" tabindex="0">
+<table>
+    <caption>Médicos cadastrados</caption>
+    <thead><tr><th scope="col">ID</th><th scope="col">Médico</th><th scope="col">Registro</th><th scope="col">Situação</th><th scope="col">Concluídos</th><th scope="col">Última atribuição</th></tr></thead>
+    <tbody>
+    {% for medico in medicos %}
+    <tr><td>{{ medico.id }}</td><th scope="row">{{ medico.nome }}</th><td>{{ medico.registro }}</td><td>{{ medico.situacao }}</td><td>{{ medico.total }}</td><td>{{ medico.ultima_atribuicao|date:"d/m/Y H:i"|default:"—" }}</td></tr>
+    {% empty %}
+    <tr><td colspan="6" class="vazio">Nenhum médico cadastrado.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
 {% endblock %}

@@ -1,0 +1,26 @@
+<div class="tabela" role="region" aria-label="{{ titulo }}" tabindex="0">
+<table>
+    <caption>{{ titulo }}</caption>
+    <thead><tr><th scope="col">ID</th><th scope="col">Paciente</th><th scope="col">Chegada</th><th scope="col">Risco</th><th scope="col">Situação</th>{% if cancelar %}<th scope="col">Ações</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for p in linhas %}
+    <tr>
+        <td>{{ p.id }}</td><th scope="row">{{ p.nome }}</th><td>{{ p.chegada|date:"d/m/Y H:i" }}</td>
+        <td>{{ p.risco }}</td><td>{{ p.situacao }}</td>
+        {% if cancelar %}
+        <td>
+            {% if p.situacao == "Aguardando" or p.situacao == "Em atendimento" %}
+                <form method="post" action="{% url 'atendimentos:acao' 'pacientes' 'cancelar' %}">
+                    {% csrf_token %}<input type="hidden" name="id" value="{{ p.id }}">
+                    <button class="secundario" aria-label="Cancelar paciente {{ p.id }}">Cancelar</button>
+                </form>
+            {% else %}—{% endif %}
+        </td>
+        {% endif %}
+    </tr>
+    {% empty %}
+    <tr><td colspan="{% if cancelar %}6{% else %}5{% endif %}" class="vazio">Nenhum paciente.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
