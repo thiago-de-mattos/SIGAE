@@ -181,6 +181,9 @@ class SistemaAtendimento:
         if inicio_utc <= datetime.min.replace(tzinfo=timezone.utc):
             raise ValueError("O início deve ser posterior à data sentinela.")
 
+        if inicio_utc < paciente.chave_chegada[0]:
+            raise ValueError("O início não pode anteceder a chegada do paciente.")
+
         atendimento = Atendimento(self._reservar_id_atendimento(), paciente, medico, inicio)
         estado_paciente = paciente.situacao
         estado_medico = medico.situacao
@@ -306,6 +309,14 @@ class SistemaAtendimento:
         if atendimento is None:
             raise KeyError(id)
         self._encerrar_atendimento(atendimento, fim, concluir=True)
+        return atendimento
+
+    @sincronizado
+    def cancelar_atendimento(self, id: int, fim: datetime | None = None) -> Atendimento:
+        atendimento = self._atendimentos.buscar(id)
+        if atendimento is None:
+            raise KeyError(id)
+        self._encerrar_atendimento(atendimento, fim, concluir=False)
         return atendimento
 
     def _encerrar_atendimento(self, atendimento, fim, *, concluir):

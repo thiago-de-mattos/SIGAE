@@ -22,5 +22,5 @@
         {% endif %}
     </section>
 </div>
-{% include "atendimentos/partes/pacientes.html" with linhas=pacientes titulo="Pacientes cadastrados" cancelar=True only %}
+{% include "atendimentos/partes/pacientes.html" with linhas=pacientes titulo="Pacientes cadastrados" cancelar=True csrf_token=csrf_token only %}
 {% endblock %}
