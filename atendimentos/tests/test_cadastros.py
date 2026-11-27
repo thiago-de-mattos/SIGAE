@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from atendimentos.domain.medico import SituacaoMedico
 from atendimentos.domain.paciente import SituacaoPaciente
-from atendimentos.services.sistema_atendimento import SistemaAtendimento
+from atendimentos.services.sistema_atendimento import SistemaAtendimento, SistemaIndisponivel
 
 
 INICIO = datetime(2026, 11, 26, 10, tzinfo=timezone.utc)
@@ -168,6 +168,8 @@ class CadastrosTests(TestCase):
              patch.object(self.sistema._arvore_espera, "remover", side_effect=erro_remocao):
             with self.assertRaises(ExceptionGroup) as capturado:
                 self.sistema.cadastrar_paciente("Ana", INICIO, 1)
-        self.assertEqual(capturado.exception.exceptions, (erro, erro_remocao))
-        self.assertIsNone(self.sistema.buscar_paciente(1))
+        self.assertEqual(capturado.exception.exceptions[:2], (erro, erro_remocao))
+        self.assertIsNone(self.sistema._pacientes.buscar(1))
+        with self.assertRaises(SistemaIndisponivel):
+            self.sistema.buscar_paciente(1)
         self.assertEqual(len(self.sistema._heap_pacientes), 0)

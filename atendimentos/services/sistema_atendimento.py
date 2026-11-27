@@ -1,6 +1,11 @@
 """Serviço central: estruturas próprias, reserva de IDs, cadastros e consultas."""
 
+from collections import Counter
+from contextlib import contextmanager
 from datetime import datetime, timezone
+from functools import wraps
+import logging
+from threading import RLock
 
 from atendimentos.domain.atendimento import Atendimento, SituacaoAtendimento
 from atendimentos.domain.medico import Medico, SituacaoMedico
@@ -10,22 +15,28 @@ from atendimentos.structures.min_heap import MinHeap
 from atendimentos.structures.tabela_hash import TabelaHash
 
 
+logger = logging.getLogger(__name__)
+
+
+class SistemaIndisponivel(RuntimeError):
+    """O serviço não pode garantir a consistência do estado."""
+
+
+def sincronizado(metodo):
+    @wraps(metodo)
+    def executar(self, *args, **kwargs):
+        with self.leitura():
+            return metodo(self, *args, **kwargs)
+
+    return executar
+
+
 class SistemaAtendimento:
-    """Base e operações das etapas SIGAE-19.3 a SIGAE-19.8.
-
-    Estruturas são internas: as views não devem acessá-las diretamente.
-    IDs são únicos por tipo e por instância, reservados em sequência a partir
-    de 1. Uma reserva é definitiva, mesmo sem criação do registro correspondente;
-    remoções e falhas posteriores não devem retroceder os contadores.
-
-    Instâncias distintas representam estados independentes. O provedor da
-    instância compartilhada, o lock das operações (incluindo reservas) e o
-    rollback centralizado serão implementados na SIGAE-20. Os cadastros usam
-    compensação local das inserções. Esta base não é sincronizada
-    para uso concorrente e não persiste dados entre execuções.
-    """
+    """Coordena os índices em memória e reserva IDs sob um único lock."""
 
     def __init__(self) -> None:
+        self._lock = RLock()
+        self._indisponivel = False
         self._pacientes = TabelaHash[Paciente]()
         self._medicos = TabelaHash[Medico]()
         self._atendimentos = TabelaHash[Atendimento]()
@@ -35,6 +46,14 @@ class SistemaAtendimento:
         self._ultimo_id_paciente = 0
         self._ultimo_id_medico = 0
         self._ultimo_id_atendimento = 0
+
+    @contextmanager
+    def leitura(self):
+        """Mantém as referências estáveis enquanto o chamador coleta os dados."""
+        with self._lock:
+            if self._indisponivel:
+                raise SistemaIndisponivel("O sistema de atendimento está indisponível.")
+            yield
 
     def _reservar_id_paciente(self) -> int:
         self._ultimo_id_paciente += 1
@@ -49,59 +68,48 @@ class SistemaAtendimento:
         return self._ultimo_id_atendimento
 
     @staticmethod
-    def _compensar_insercoes(compensacoes, erro_original: Exception) -> None:
-        """Desfaz tentativas em ordem inversa, inclusive inserção que lançou erro.
+    def _remover_se_presente(indice, chave):
+        try:
+            indice.remover(chave)
+        except KeyError:
+            pass
 
-        A lista temporária registra apenas as remoções desta operação; não é
-        um cadastro paralelo. Pressupõe índices recuperáveis pelas suas APIs.
-        Falhas de compensação são propagadas, nunca apresentadas como sucesso.
-        """
-        erros = []
-        for remover, chave in reversed(compensacoes):
-            try:
-                remover(chave)
-            except KeyError:
-                # A tentativa pode ter falhado antes de inserir o registro.
-                pass
-            except Exception as erro:
-                erros.append(erro)
-        if erros:
-            raise ExceptionGroup(
-                "Falha no cadastro e na compensação local.", [erro_original, *erros]
-            ) from erro_original
-
+    @sincronizado
     def cadastrar_paciente(self, nome: str, chegada: datetime, prioridade: int) -> Paciente:
         paciente = Paciente(self._reservar_id_paciente(), nome, chegada, prioridade)
         # A entidade valida todos os campos antes de qualquer alteração de índice.
         compensacoes = []
         try:
-            compensacoes.append((self._pacientes.remover, paciente.id))
+            compensacoes.append(lambda: self._remover_se_presente(self._pacientes, paciente.id))
             self._pacientes.inserir(paciente.id, paciente)
-            compensacoes.append((self._arvore_espera.remover, paciente.chave_chegada))
+            compensacoes.append(lambda: self._remover_se_presente(self._arvore_espera, paciente.chave_chegada))
             self._arvore_espera.inserir(paciente.chave_chegada, paciente)
-            compensacoes.append((self._heap_pacientes.remover, paciente.id))
+            compensacoes.append(lambda: self._remover_se_presente(self._heap_pacientes, paciente.id))
             self._heap_pacientes.inserir(paciente)
         except Exception as erro:
-            self._compensar_insercoes(compensacoes, erro)
+            self._compensar_operacao(compensacoes, erro)
             raise
         return paciente
 
+    @sincronizado
     def cadastrar_medico(self, nome: str, registro: str) -> Medico:
         medico = Medico(self._reservar_id_medico(), nome, registro)
         compensacoes = []
         try:
-            compensacoes.append((self._medicos.remover, medico.id))
+            compensacoes.append(lambda: self._remover_se_presente(self._medicos, medico.id))
             self._medicos.inserir(medico.id, medico)
-            compensacoes.append((self._heap_medicos.remover, medico.id))
+            compensacoes.append(lambda: self._remover_se_presente(self._heap_medicos, medico.id))
             self._heap_medicos.inserir(medico)
         except Exception as erro:
-            self._compensar_insercoes(compensacoes, erro)
+            self._compensar_operacao(compensacoes, erro)
             raise
         return medico
 
+    @sincronizado
     def buscar_paciente(self, id: int) -> Paciente | None:
         return self._pacientes.buscar(id)
 
+    @sincronizado
     def reclassificar_paciente(self, id: int, prioridade: int) -> Paciente:
         """Reclassifica a mesma entidade e reorganiza somente seu Heap.
 
@@ -120,20 +128,19 @@ class SistemaAtendimento:
         try:
             self._heap_pacientes.atualizar(id)
         except Exception as erro:
-            try:
-                paciente.reclassificar(anterior)
-                self._heap_pacientes.atualizar(id)
-            except Exception as recuperacao:
-                raise ExceptionGroup(
-                    "Falha na reclassificação e na compensação local.",
-                    [erro, recuperacao],
-                ) from erro
+            self._compensar_operacao(
+                [lambda: self._heap_pacientes.atualizar(id),
+                 lambda: paciente.reclassificar(anterior)],
+                erro,
+            )
             raise
         return paciente
 
+    @sincronizado
     def buscar_medico(self, id: int) -> Medico | None:
         return self._medicos.buscar(id)
 
+    @sincronizado
     def chamar_proximo(self, inicio: datetime | None = None) -> Atendimento:
         """Seleciona ambos os mínimos e inicia um atendimento, sem concluir nenhum.
 
@@ -150,7 +157,6 @@ class SistemaAtendimento:
         Confere os índices afetados: para n registros e b buckets em cada um,
         validar custa até O(b log(b+1) + n²) no Heap, O(b log(b+1) +
         n log(n+1)) na Hash e O(n) na árvore; espaço auxiliar O(b+n).
-        Não há sincronização concorrente nesta etapa.
         """
         paciente = self._heap_pacientes.consultar_minimo()
         medico = self._heap_medicos.consultar_minimo()
@@ -211,11 +217,7 @@ class SistemaAtendimento:
             compensacoes.append(remover_atendimento)
             self._atendimentos.inserir(atendimento.id, atendimento)
         except Exception as erro:
-            self._compensar_operacao(
-                compensacoes,
-                (self._heap_pacientes, self._arvore_espera,
-                 self._heap_medicos, self._atendimentos), erro,
-            )
+            self._compensar_operacao(compensacoes, erro)
             raise
         return atendimento
 
@@ -228,32 +230,59 @@ class SistemaAtendimento:
             pass
         heap.inserir(item)
 
-    @staticmethod
-    def _compensar_operacao(compensacoes, indices, erro):
-        """Executa as compensações locais e valida os índices recuperados.
-
-        Não é uma transação centralizada: cada operação prepara sua recuperação.
-        Pressupõe índices recuperáveis por suas APIs, como na chamada.
-        Para n registros e b buckets por índice, a validação do Heap custa
-        O(b log(b+1) + n log(n+1)) esperado, O(b log(b+1) + n²) no pior
-        caso; Hash O(b log(b+1) + n log(n+1)); árvore O(n).
-        Espaço auxiliar dos validadores O(b+n).
-        """
+    def _compensar_operacao(self, compensacoes, erro):
+        """Desfaz etapas e bloqueia o serviço se a recuperação não for confiável."""
         erros = []
         for compensar in reversed(compensacoes):
             try:
                 compensar()
             except Exception as recuperacao:
                 erros.append(recuperacao)
-        for indice in indices:
-            try:
-                indice.validar()
-            except Exception as recuperacao:
-                erros.append(recuperacao)
+        try:
+            self.validar_indices()
+        except Exception as recuperacao:
+            erros.append(recuperacao)
         if erros:
-            raise ExceptionGroup(
-                "Falha na operação e na compensação local.", [erro, *erros]
-            ) from erro
+            self._indisponivel = True
+            falha = ExceptionGroup("Falha na operação e na compensação local.", [erro, *erros])
+            logger.error("Estado do SIGAE bloqueado após falha de recuperação.", exc_info=falha)
+            raise falha from erro
+
+    @sincronizado
+    def validar_indices(self) -> None:
+        """Verifica os índices, os vínculos ativos e os totais médicos."""
+        for indice in (self._pacientes, self._medicos, self._atendimentos,
+                       self._arvore_espera, self._heap_pacientes, self._heap_medicos):
+            indice.validar()
+
+        pacientes = self.listar_pacientes()
+        medicos = self.listar_medicos()
+        espera = {p for p in pacientes if p.situacao == SituacaoPaciente.AGUARDANDO}
+        disponiveis = {m for m in medicos if m.situacao == SituacaoMedico.DISPONIVEL}
+        if (set(self.listar_fila()) != espera
+                or set(self._heap_pacientes.listar_itens()) != espera
+                or set(self._heap_medicos.listar_itens()) != disponiveis):
+            raise ValueError("As filas não correspondem aos cadastros elegíveis.")
+
+        ativos_pacientes = Counter()
+        ativos_medicos = Counter()
+        concluidos = Counter()
+        for atendimento in self._atendimentos.listar_valores():
+            paciente, medico = atendimento.paciente, atendimento.medico
+            if self.buscar_paciente(paciente.id) is not paciente or self.buscar_medico(medico.id) is not medico:
+                raise ValueError("Atendimento com referência incompatível.")
+            if atendimento.situacao == SituacaoAtendimento.EM_ATENDIMENTO:
+                ativos_pacientes[paciente] += 1
+                ativos_medicos[medico] += 1
+            if atendimento.situacao == SituacaoAtendimento.CONCLUIDO:
+                concluidos[medico] += 1
+            if atendimento.situacao.value != paciente.situacao.value:
+                raise ValueError("Situação do atendimento incompatível com a do paciente.")
+
+        if (any(ativos_pacientes[p] != (p.situacao == SituacaoPaciente.EM_ATENDIMENTO) for p in pacientes)
+                or any(ativos_medicos[m] != (m.situacao == SituacaoMedico.EM_ATENDIMENTO) for m in medicos)
+                or any(concluidos[m] != m.total_concluidos for m in medicos)):
+            raise ValueError("Atendimentos ativos ou contadores incompatíveis.")
 
     @staticmethod
     def _horario_encerramento(fim, inicio):
@@ -264,6 +293,7 @@ class SistemaAtendimento:
             raise ValueError("O encerramento não pode anteceder o início.")
         return fim
 
+    @sincronizado
     def concluir_atendimento(self, id: int, fim: datetime | None = None) -> Atendimento:
         """Encerra pela Hash, contando exatamente uma conclusão.
 
@@ -315,9 +345,10 @@ class SistemaAtendimento:
             compensacoes.append(retirar_medico)
             self._heap_medicos.inserir(medico)
         except Exception as erro:
-            self._compensar_operacao(compensacoes, (self._heap_medicos,), erro)
+            self._compensar_operacao(compensacoes, erro)
             raise
 
+    @sincronizado
     def cancelar_paciente(self, id: int, fim: datetime | None = None) -> Paciente:
         """Cancela espera ou atendimento ativo, preservando todos os cadastros.
 
@@ -369,32 +400,36 @@ class SistemaAtendimento:
             compensacoes.append(lambda: setattr(paciente, "_situacao", anterior))
             paciente.cancelar()
         except Exception as erro:
-            self._compensar_operacao(
-                compensacoes, (self._heap_pacientes, self._arvore_espera), erro,
-            )
+            self._compensar_operacao(compensacoes, erro)
             raise
         return paciente
 
+    @sincronizado
     def listar_pacientes(self) -> list[Paciente]:
         """Nova lista de referências de todos os pacientes, sem ordem garantida."""
         return self._pacientes.listar_valores()
 
+    @sincronizado
     def listar_medicos(self) -> list[Medico]:
         """Nova lista de referências de todos os médicos, sem ordem garantida."""
         return self._medicos.listar_valores()
 
+    @sincronizado
     def listar_fila(self) -> list[Paciente]:
         """Espera por chegada e ID via árvore; tempo e espaço O(n), n em espera."""
         return self._arvore_espera.em_ordem()
 
+    @sincronizado
     def consultar_proximo_paciente(self) -> Paciente | None:
         """Referência ao mínimo clínico, ou None; tempo e espaço O(1)."""
         return self._heap_pacientes.consultar_minimo()
 
+    @sincronizado
     def consultar_proximo_medico(self) -> Medico | None:
         """Referência ao médico elegível mínimo, ou None; tempo e espaço O(1)."""
         return self._heap_medicos.consultar_minimo()
 
+    @sincronizado
     def listar_atendimentos_ativos(self) -> list[Atendimento]:
         """Referências aos ativos, sem ordem garantida.
 
@@ -403,6 +438,7 @@ class SistemaAtendimento:
         return [a for a in self._atendimentos.listar_valores()
                 if a.situacao == SituacaoAtendimento.EM_ATENDIMENTO]
 
+    @sincronizado
     def listar_historico(self) -> list[Atendimento]:
         """Encerrados por (início, ID), conforme a arquitetura.
 
@@ -416,6 +452,7 @@ class SistemaAtendimento:
                       if a.situacao != SituacaoAtendimento.EM_ATENDIMENTO]
         return sorted(encerrados, key=lambda a: (a.inicio, a.id))
 
+    @sincronizado
     def listar_chegadas(self) -> list[Paciente]:
         """Todos os estados por (chegada, ID), preservando referências.
 
@@ -424,6 +461,7 @@ class SistemaAtendimento:
         """
         return sorted(self.listar_pacientes(), key=lambda p: p.chave_chegada)
 
+    @sincronizado
     def obter_indicadores(self) -> dict:
         """Agregação nova a cada consulta, sem caches ou contadores adicionais.
 
@@ -435,8 +473,7 @@ class SistemaAtendimento:
 
         Para P pacientes, M médicos, A atendimentos e B soma dos buckets das
         três Hashes: tempo O(B+P+M+A), espaço O(P+M+A), no pior caso também.
-        As referências retornadas são vivas; estas consultas não oferecem uma
-        fotografia protegida contra concorrência (responsabilidade da SIGAE-20).
+        Use o contexto leitura() para materializar os campos das referências.
         """
         pacientes = self.listar_pacientes()
         medicos = self.listar_medicos()
