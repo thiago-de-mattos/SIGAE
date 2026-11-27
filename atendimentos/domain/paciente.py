@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 
 
@@ -29,11 +29,17 @@ class Paciente:
         if chegada.utcoffset() is None:
             raise ValueError("O horário de chegada deve possuir fuso horário.")
 
+        try:
+            chegada_utc = chegada.astimezone(timezone.utc)
+        except (OverflowError, ValueError) as erro:
+            raise ValueError("O horário de chegada deve ser representável em UTC.") from erro
+
         self._validar_prioridade(prioridade)
 
         self._id = id
         self._nome = nome.strip()
         self._chegada = chegada
+        self._chegada_utc = chegada_utc
         self._prioridade = prioridade
         self._situacao = SituacaoPaciente.AGUARDANDO
 
@@ -64,11 +70,11 @@ class Paciente:
 
     @property
     def chave_chegada(self) -> tuple[datetime, int]:
-        return self.chegada, self.id
+        return self._chegada_utc, self.id
 
     @property
     def chave_prioridade(self) -> tuple[int, datetime, int]:
-        return self.prioridade, self.chegada, self.id
+        return self.prioridade, *self.chave_chegada
 
     def reclassificar(self, prioridade: int) -> None:
         if self.situacao != SituacaoPaciente.AGUARDANDO:
