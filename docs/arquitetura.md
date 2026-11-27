@@ -5,11 +5,17 @@
 Este documento define as interfaces e responsabilidades para o SIGAE WEB.
 Não representa a implementação completa do sistema.
 
-- Existentes: base Django, página inicial, classe `Paciente` e seus testes.
+- Existentes: base Django, classe `Paciente`, `TabelaHash`, `MinHeap` e
+  `ArvoreRubroNegra`, com testes unitários. As estruturas são independentes das
+  views e ainda não estão coordenadas por um serviço de atendimento.
+- Interface existente: seis protótipos navegáveis — Painel geral, Pacientes,
+  Triagem/Fila, Médicos, Atendimentos e Histórico — com dados fictícios estáticos,
+  views somente GET e ações de negócio desabilitadas. Telas, URLs, limitações e
+  revisão pendente estão em [prototipos.md](prototipos.md).
 - Contratos: `Identificavel`, `ContratoHash`, `ContratoHeap` e `ContratoArvore`
   em `atendimentos/contratos.py` (Protocols do Python).
-- Planejados: `Medico`, `Atendimento`, `SistemaAtendimento`, `TabelaHash`,
-  `MinHeap` e `ArvoreRubroNegra`.
+- Planejados: `Medico`, `Atendimento`, `SistemaAtendimento`, formulários e
+  integração das operações com a interface e os índices.
 - Estado entre requisições: estratégia documentada na SIGAE-10 abaixo;
   implementação futura.
 - Integração e recuperação de falhas: SIGAE-19 e SIGAE-20.
@@ -33,10 +39,11 @@ explícita. Os testes das implementações deverão comprovar os comportamentos.
 | `css/` | Arquivos CSS centralizados na raiz |
 | `atendimentos/tests/` | Testes de entidades, estruturas, integração e interface |
 
-As views não alteram entidades ou índices diretamente. O serviço controla
-as operações completas. Domínio e estruturas não importam views, formulários
-ou modelos do Django. O serviço não é recriado com filas vazias a cada requisição;
-a instância segue a estratégia em memória da SIGAE-10 abaixo, sem persistência.
+As views atuais apenas renderizam os protótipos e não alteram entidades ou índices.
+Na integração futura, o serviço controlará as operações completas. Domínio e
+estruturas não importam views, formulários ou modelos do Django. O serviço não
+deverá ser recriado com filas vazias a cada requisição; sua instância seguirá a
+estratégia em memória da SIGAE-10 abaixo, sem persistência.
 
 ## SIGAE-10 — Estado em memória e acesso entre requisições
 
@@ -98,7 +105,7 @@ Cadastro, reclassificação, chamada, conclusão e cancelamento deverão seguir:
    nem apresentar sucesso. Registrar a falha para diagnóstico.
 
 O lock impede interferência concorrente, mas não desfaz alterações sozinho.
-As implementações futuras das estruturas deverão garantir que falhas em uma
+Na integração das estruturas existentes, deverá ser garantido que falhas em uma
 mutação sejam recuperáveis, inclusive quando ocorram antes de o método retornar.
 Os Protocols atuais não oferecem transações nem restauração de entidades.
 A implementação do mecanismo interno de recuperação ficará na integração
@@ -225,16 +232,27 @@ As implementações devem rejeitar erros de entrada antes de modificar o estado.
 Os métodos de listagem não permitem que alterar a lista retornada altere os nós ou
 buckets internos; seus elementos continuam sendo referências às entidades.
 
-### Configuração das implementações futuras
+### Configuração das estruturas implementadas
 
 - `TabelaHash(capacidade=11, fator_carga_maximo=0.75)`: capacidade positiva,
   função `id % capacidade`, encadeamento separado e redimensionamento com rehash.
+  A capacidade dobra até comportar a próxima inserção dentro do fator máximo;
+  remoções não reduzem a capacidade. Implementa todas as operações de `ContratoHash`.
   Esses valores são escolhas do projeto, não números obrigatórios do enunciado.
 - `MinHeap(chave)`: recebe uma função que produz uma tupla comparável a partir
   do item. Usa lista e Hash própria de posições. A função deve ser determinística
-  e não alterar o item. Trocas devem atualizar as duas posições na Hash.
+  e não alterar o item. Trocas atualizam as duas posições na Hash. Implementa
+  `ContratoHeap`; os critérios de pacientes e médicos são configurados pelo
+  chamador. Os testes médicos usam objetos fictícios, pois `Medico` ainda não existe.
 - `ArvoreRubroNegra()`: inicia vazia, com sentinela NIL preta; rotações,
-  recolorações e correções são detalhes internos.
+  recolorações e correções são detalhes internos. Implementa `ContratoArvore`,
+  inclusive correção após remoção e validação dos invariantes.
+
+As três estruturas preservam referências aos objetos. Seus testes verificam
+operações isoladas e invariantes; a consistência conjunta de cadastros, filas,
+estados e vínculos continua sendo responsabilidade da integração futura.
+As complexidades detalhadas, incluindo custos da Hash auxiliar do Heap e dos
+validadores, estão nas docstrings das classes em `atendimentos/structures/`.
 
 Critério de pacientes: `(prioridade, chegada, id)`; menor valor vence.
 Critério de médicos: `(total_concluidos, ultima_atribuicao_ou_minimo, id)`.
