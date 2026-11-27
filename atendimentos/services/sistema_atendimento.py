@@ -1,17 +1,17 @@
 """Serviço central: estruturas próprias, reserva de IDs, cadastros e consultas."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from atendimentos.domain.atendimento import Atendimento
-from atendimentos.domain.medico import Medico
-from atendimentos.domain.paciente import Paciente
+from atendimentos.domain.medico import Medico, SituacaoMedico
+from atendimentos.domain.paciente import Paciente, SituacaoPaciente
 from atendimentos.structures.arvore_rubro_negra import ArvoreRubroNegra
 from atendimentos.structures.min_heap import MinHeap
 from atendimentos.structures.tabela_hash import TabelaHash
 
 
 class SistemaAtendimento:
-    """Base, cadastros e reclassificação das etapas SIGAE-19.3 a SIGAE-19.5.
+    """Base e operações das etapas SIGAE-19.3 a SIGAE-19.6.
 
     Estruturas são internas: as views não devem acessá-las diretamente.
     IDs são únicos por tipo e por instância, reservados em sequência a partir
@@ -133,6 +133,110 @@ class SistemaAtendimento:
 
     def buscar_medico(self, id: int) -> Medico | None:
         return self._medicos.buscar(id)
+
+    def chamar_proximo(self, inicio: datetime | None = None) -> Atendimento:
+        """Seleciona ambos os mínimos e inicia um atendimento, sem concluir nenhum.
+
+        Sem horário explícito, usa o instante atual em UTC. Ausência de paciente
+        ou médico gera ValueError sem reservar ID nem alterar o estado.
+
+        Para P/M cadastrados, p/m nos Heaps e A atendimentos: custo esperado
+        amortizado O(log(p+1) + log(m+1)); pior caso
+        O(P + M + p log(p+1) + m log(m+1) + A), incluindo colisões,
+        realocações das listas e crescimento da Hash de atendimentos.
+        Espaço auxiliar constante, exceto rehash O(A).
+
+        A compensação local pressupõe estruturas recuperáveis por suas APIs.
+        Confere os índices afetados: para n registros e b buckets em cada um,
+        validar custa até O(b log(b+1) + n²) no Heap, O(b log(b+1) +
+        n log(n+1)) na Hash e O(n) na árvore; espaço auxiliar O(b+n).
+        Não há sincronização concorrente nesta etapa.
+        """
+        paciente = self._heap_pacientes.consultar_minimo()
+        medico = self._heap_medicos.consultar_minimo()
+        if paciente is None or medico is None:
+            raise ValueError("É necessário haver paciente aguardando e médico disponível.")
+        if (paciente.situacao != SituacaoPaciente.AGUARDANDO
+                or medico.situacao != SituacaoMedico.DISPONIVEL):
+            raise ValueError("Paciente ou médico em estado incompatível com a chamada.")
+        if (self._pacientes.buscar(paciente.id) is not paciente
+                or self._medicos.buscar(medico.id) is not medico
+                or self._arvore_espera.buscar(paciente.chave_chegada) is not paciente):
+            raise ValueError("Referências incompatíveis nos índices da chamada.")
+        if inicio is None:
+            inicio = datetime.now(timezone.utc)
+        # Mesmas restrições temporais exigidas pelo médico, antes das mutações.
+        if not isinstance(inicio, datetime) or inicio.utcoffset() is None:
+            raise ValueError("O início deve ser uma data e horário com fuso horário.")
+        try:
+            inicio_utc = inicio.astimezone(timezone.utc)
+        except (OverflowError, ValueError) as erro:
+            raise ValueError("O início deve ser representável em UTC.") from erro
+        if inicio_utc <= datetime.min.replace(tzinfo=timezone.utc):
+            raise ValueError("O início deve ser posterior à data sentinela.")
+
+        atendimento = Atendimento(self._reservar_id_atendimento(), paciente, medico, inicio)
+        estado_paciente = paciente.situacao
+        estado_medico = medico.situacao
+        ultima_atribuicao = medico.ultima_atribuicao
+        compensacoes = []  # Registro temporário de recuperação, não é um índice.
+
+        def restaurar_heap(heap, item):
+            # Normaliza tanto a falha anterior quanto a posterior à remoção.
+            try:
+                heap.remover(item.id)
+            except KeyError:
+                pass
+            heap.inserir(item)
+
+        def restaurar_arvore():
+            if self._arvore_espera.buscar(paciente.chave_chegada) is None:
+                self._arvore_espera.inserir(paciente.chave_chegada, paciente)
+
+        def restaurar_medico():
+            # Restauração interna não representa uma transição de negócio.
+            medico._situacao = estado_medico
+            medico._ultima_atribuicao = ultima_atribuicao
+
+        def remover_atendimento():
+            try:
+                self._atendimentos.remover(atendimento.id)
+            except KeyError:
+                pass
+
+        try:
+            # Registrar antes da tentativa cobre exceções após a mutação.
+            compensacoes.append(lambda: restaurar_heap(self._heap_pacientes, paciente))
+            self._heap_pacientes.remover(paciente.id)
+            compensacoes.append(restaurar_arvore)
+            self._arvore_espera.remover(paciente.chave_chegada)
+            compensacoes.append(lambda: restaurar_heap(self._heap_medicos, medico))
+            self._heap_medicos.remover(medico.id)
+            compensacoes.append(lambda: setattr(paciente, "_situacao", estado_paciente))
+            paciente.iniciar_atendimento()
+            compensacoes.append(restaurar_medico)
+            medico.iniciar_atendimento(inicio)
+            compensacoes.append(remover_atendimento)
+            self._atendimentos.inserir(atendimento.id, atendimento)
+        except Exception as erro:
+            erros = []
+            for compensar in reversed(compensacoes):
+                try:
+                    compensar()
+                except Exception as recuperacao:
+                    erros.append(recuperacao)
+            for indice in (self._heap_pacientes, self._arvore_espera,
+                           self._heap_medicos, self._atendimentos):
+                try:
+                    indice.validar()
+                except Exception as recuperacao:
+                    erros.append(recuperacao)
+            if erros:
+                raise ExceptionGroup(
+                    "Falha na chamada e na compensação local.", [erro, *erros]
+                ) from erro
+            raise
+        return atendimento
 
     def listar_pacientes(self) -> list[Paciente]:
         """Nova lista de referências de todos os pacientes, sem ordem garantida."""
