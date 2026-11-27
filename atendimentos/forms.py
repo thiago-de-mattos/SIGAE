@@ -25,6 +25,10 @@ class PacienteForm(forms.Form):
 
     def clean_chegada(self):
         chegada = self.cleaned_data["chegada"]
+        try:
+            chegada = timezone.localtime(chegada)
+        except (OverflowError, ValueError) as erro:
+            raise forms.ValidationError("A chegada não é representável no horário de Brasília.") from erro
         if chegada > timezone.now():
             raise forms.ValidationError("A chegada não pode estar no futuro.")
         return chegada

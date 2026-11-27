@@ -2,6 +2,7 @@ from contextlib import ExitStack
 from datetime import datetime, timedelta, timezone
 from unittest import TestCase
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from atendimentos.services.sistema_atendimento import SistemaAtendimento
 
@@ -174,3 +175,14 @@ class IndicadoresTests(TestCase):
                 self.assertEqual(linha['total_concluidos'], sum(a.medico is linha['medico'] and a.situacao == 'concluido' for a in atendimentos))
         self.assertEqual(s.listar_atendimentos_ativos(), [])
         self.assertEqual(len(s.listar_historico()), 30)
+
+    def test_historico_ordena_instantes_distintos_na_hora_repetida(self):
+        fuso = ZoneInfo("America/New_York")
+        cedo = datetime(2026, 11, 1, 1, 30, tzinfo=fuso)
+        tarde = cedo.replace(fold=1)
+        sistema = self.preparar()
+        primeiro = sistema.chamar_proximo(tarde)
+        segundo = sistema.chamar_proximo(cedo)
+        sistema.concluir_atendimento(primeiro.id, tarde)
+        sistema.concluir_atendimento(segundo.id, cedo)
+        self.assertEqual(sistema.listar_historico(), [segundo, primeiro])
