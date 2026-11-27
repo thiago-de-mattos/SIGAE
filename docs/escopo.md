@@ -148,10 +148,11 @@ requisições e apresentam os resultados sem alterar diretamente as entidades.
 
 ## Confronto com a documentação existente
 
-- O README já declara Python, Django e interface web, mas resume apenas três
-  tipos de estruturas; não explicita os dois Heaps, os critérios médicos, todas
-  as operações, telas, testes ou entregáveis. Também não contém ainda instruções
-  reproduzíveis de instalação e execução. São lacunas, não requisitos dispensados.
+- Na revisão de 27/11/2026, o README contém pré-requisitos, instalação, execução,
+  os seis módulos e comandos de verificação. Os critérios dos dois Heaps e as
+  demais decisões técnicas estão na arquitetura e no relatório de entrega.
+  Isso corrige a observação inicial de ausência dessas instruções; a instalação
+  limpa permanece não verificada nesta auditoria.
 - A arquitetura inclui Hash de médicos como decisão do projeto; sua presença
   não torna essa estrutura obrigatória no enunciado. O mesmo cuidado vale para
   a Hash de atendimentos e os parâmetros concretos de implementação.
@@ -161,9 +162,13 @@ requisições e apresentam os resultados sem alterar diretamente as entidades.
 - A arquitetura distingue componentes existentes de planejados. Os Protocols
   não implementam algoritmos e não comprovam os testes; este documento também
   não declara concluídas as funcionalidades futuras.
-- Não foi encontrada nos três arquivos lidos uma exigência de persistência em
-  banco, visualização gráfica ou alegação de autorização do professor para WEB.
-  A arquitetura deixa a eventual persistência para definição posterior.
+- Persistência e visualização gráfica continuam opcionais. A arquitetura
+  documenta o processo único em memória e a perda do estado ao reiniciar.
 
 A SIGAE-01 entrega somente este documento; não implementa funcionalidades nem
 altera outros arquivos.
+
+A revisão documental da branch experimental não altera os requisitos acima.
+Redesign e cancelamento pela Triagem/Fila reutilizam as operações existentes.
+As evidências atuais, incluindo a distinção entre suíte permanente e testes
+adicionais temporários, estão em [entrega.md](entrega.md#evidências).

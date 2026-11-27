@@ -6,7 +6,7 @@
     {% for medico in medicos %}
     <tr><td>{{ medico.id }}</td><th scope="row">{{ medico.nome }}</th><td>{{ medico.total }}</td></tr>
     {% empty %}
-    <tr><td colspan="3" class="vazio">Nenhum médico cadastrado.</td></tr>
+    <tr><td colspan="3" class="vazio"><strong>Nenhum médico cadastrado.</strong> <a href="{% url 'atendimentos:medicos' %}#cadastro">Cadastrar médico</a></td></tr>
     {% endfor %}
     </tbody>
 </table>

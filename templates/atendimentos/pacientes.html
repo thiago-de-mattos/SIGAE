@@ -1,25 +1,25 @@
 {% extends "atendimentos/base.html" %}
 {% block title %}Pacientes · SIGAE WEB{% endblock %}
 {% block content %}
-<h1>Pacientes</h1>
+<div class="titulo-pagina"><div><p class="sobretitulo">Recepção e cadastro</p><h1>Pacientes</h1><p class="descricao">Cadastre chegadas, consulte registros e acompanhe a situação de cada paciente.</p></div></div>
 <div class="grade">
-    <section class="cartao">
-        <h2>Cadastrar paciente</h2>
-        <form method="post" action="{% url 'atendimentos:acao' 'pacientes' 'cadastrar' %}">
-            {% csrf_token %}{{ cadastro.as_div }}
+    <section class="cartao" id="cadastro">
+        <h2>Cadastrar paciente</h2><p class="ajuda">Informe os dados de chegada e a classificação de risco. Todos os campos são obrigatórios. A chegada é preenchida com o horário atual de Brasília e pode ser editada para simulações.</p>
+        <form class="formulario-grade" method="post" action="{% url 'atendimentos:acao' 'pacientes' 'cadastrar' %}"{% if not cadastro.is_bound %} data-chegada-atual{% endif %}>
+            {% csrf_token %}{% include "atendimentos/partes/formulario_risco.html" with formulario=cadastro only %}
             <button>Cadastrar paciente</button>
         </form>
     </section>
     <section class="cartao">
-        <h2>Consultar paciente</h2>
-        <form method="get" action="{% url 'atendimentos:pacientes' %}">
+        <h2>Consultar paciente</h2><p class="ajuda">Use o ID exibido na lista de pacientes.</p>
+        <form class="busca-inline" method="get" action="{% url 'atendimentos:pacientes' %}">
             {{ busca.as_div }}
             <button>Consultar paciente</button>
         </form>
-        {% if resultado %}
+        {% if resultado %}<div class="resultado" role="status"><span class="sobretitulo">Registro encontrado</span>
         <p><strong>{{ resultado.nome }}</strong> · ID {{ resultado.id }}</p>
-        <p>{{ resultado.situacao }} · {{ resultado.risco }} · {{ resultado.chegada|date:"d/m/Y H:i" }}</p>
-        {% endif %}
+        <p>{% include "atendimentos/partes/situacao.html" with situacao=resultado.situacao only %} · {% include "atendimentos/partes/risco.html" with risco=resultado.risco only %} · {{ resultado.chegada|date:"d/m/Y H:i" }}</p>
+        </div>{% endif %}
     </section>
 </div>
 {% include "atendimentos/partes/pacientes.html" with linhas=pacientes titulo="Pacientes cadastrados" cancelar=True csrf_token=csrf_token only %}

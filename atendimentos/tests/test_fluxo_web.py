@@ -108,6 +108,59 @@ class FluxoWebTests(SimpleTestCase):
         self.assertEqual(len(sistema.listar_atendimentos_ativos()), 1)
         sistema.validar_indices()
 
+    def test_cancelamento_na_triagem_atualiza_fila_indices_e_proxima_chamada(self):
+        self.paciente("Ana", 1)
+        self.paciente("Bia", 2)
+        self.medico("Alfa")
+        pagina = self.operador.get('/triagem/')
+        self.assertContains(pagina, '<th scope="col">Ações</th>', html=True)
+        html = pagina.content.decode()
+        formulario = html.split('action="/pacientes/cancelar/"', 1)[1].split('</form>', 1)[0]
+        self.assertIn('data-confirmar=', formulario)
+        self.assertIn('class="secundario"', formulario)
+        self.assertIn('name="retorno" value="triagem"', formulario)
+        token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', formulario).group(1)
+        response = self.operador.post('/pacientes/cancelar/', {
+            'id': 1, 'retorno': 'triagem', 'csrfmiddlewaretoken': token,
+        }, follow=True)
+        self.assertRedirects(response, '/triagem/')
+        self.assertContains(response, 'Paciente cancelado.')
+        self.assertEqual([p['id'] for p in response.context['fila']], [2])
+        self.assertEqual(response.context['proximo_paciente']['id'], 2)
+        self.assertEqual(response.context['proximo_medico']['id'], 1)
+        sistema = estado.obter_sistema()
+        self.assertEqual(sistema.buscar_paciente(1).situacao, 'cancelado')
+        self.assertEqual(sistema.listar_historico(), [])
+        sistema.validar_indices()
+        self.assertRedirects(self.enviar('pacientes', 'cancelar', id=2, retorno='triagem'), '/triagem/')
+        vazia = self.operador.get('/triagem/')
+        self.assertIsNone(vazia.context['proximo_paciente'])
+        self.assertContains(vazia, '<button disabled>Chamar próximo</button>', html=True)
+        sistema.validar_indices()
+
+    def test_cancelamento_na_triagem_preserva_validacoes_e_contexto_em_erros(self):
+        self.paciente('Ana', 1)
+        self.assertEqual(self.operador.post('/pacientes/cancelar/', {
+            'id': 1, 'retorno': 'triagem',
+        }).status_code, 403)
+        self.assertEqual(self.operador.get('/pacientes/cancelar/?retorno=triagem').status_code, 405)
+        for id, mensagem in ((0, 'Informe um ID válido.'), (999, 'Registro não encontrado.')):
+            response = self.enviar('pacientes', 'cancelar', id=id, retorno='triagem')
+            self.assertContains(response, mensagem, status_code=400)
+            self.assertTemplateUsed(response, 'atendimentos/triagem.html')
+            self.assertEqual(response.context['proximo_paciente']['id'], 1)
+        self.enviar('pacientes', 'cancelar', id=1, retorno='triagem')
+        repetida = self.enviar('pacientes', 'cancelar', id=1, retorno='triagem')
+        self.assertEqual(repetida.status_code, 400)
+        self.assertTemplateUsed(repetida, 'atendimentos/triagem.html')
+        self.assertEqual(repetida.context['fila'], [])
+        estado.obter_sistema().validar_indices()
+
+    def test_destino_de_cancelamento_aceita_somente_triagem_como_alternativa(self):
+        self.paciente('Ana', 1)
+        response = self.enviar('pacientes', 'cancelar', id=1, retorno='https://example.com/')
+        self.assertRedirects(response, '/pacientes/')
+
     def test_inicio_anterior_a_chegada_preserva_fila_e_medico(self):
         sistema = estado.obter_sistema()
         chegada = datetime(2024, 10, 1, tzinfo=timezone.utc)

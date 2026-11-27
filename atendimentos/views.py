@@ -140,6 +140,11 @@ def acao(request, modulo, comando):
     formulario, chave, operacao, sucesso = configuracao
     form = formulario(request.POST, prefix=chave) if formulario else None
     erro = None
+    # Destino interno fixo: o mesmo cancelamento pode partir da fila.
+    modulo_retorno = (
+        "triagem" if (modulo, comando) == ("pacientes", "cancelar")
+        and request.POST.get("retorno") == "triagem" else modulo
+    )
 
     try:
         sistema = obter_sistema()
@@ -153,11 +158,11 @@ def acao(request, modulo, comando):
                     erro = str(exc)
                 else:
                     messages.success(request, sucesso)
-                    destino = "atendimentos" if comando == "chamar" else modulo
+                    destino = "atendimentos" if comando == "chamar" else modulo_retorno
                     return redirect(f"atendimentos:{destino}")
-            contexto = contexto_modulo(request, sistema, modulo)
+            contexto = contexto_modulo(request, sistema, modulo_retorno)
     except (SistemaIndisponivel, ExceptionGroup):
-        return erro_indisponivel(request, modulo)
+        return erro_indisponivel(request, modulo_retorno)
 
     if chave and form is not None:
         if erro:
@@ -165,5 +170,5 @@ def acao(request, modulo, comando):
         contexto[chave] = form
     elif form is not None and not form.is_valid():
         erro = "Informe um ID válido."
-    contexto.update(modulo=modulo, erro_acao=erro)
-    return render(request, f"atendimentos/{modulo}.html", contexto, status=400)
+    contexto.update(modulo=modulo_retorno, erro_acao=erro)
+    return render(request, f"atendimentos/{modulo_retorno}.html", contexto, status=400)

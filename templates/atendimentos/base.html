@@ -4,21 +4,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2563EB">
     <title>{% block title %}SIGAE WEB{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <script src="{% static 'atendimentos/interface.js' %}" defer></script>
 </head>
 <body>
     <a class="pular" href="#conteudo">Pular para o conteúdo</a>
-    <header class="cabecalho">
-        <a class="marca" href="{% url 'atendimentos:inicio' %}">SIGAE WEB</a>
-        <span>Simulador acadêmico</span>
-    </header>
-    <nav aria-label="Módulos"><ul class="navegacao"><li><a href="{% url 'atendimentos:inicio' %}" {% if modulo == 'inicio' %}aria-current="page"{% endif %}>Painel geral</a></li><li><a href="{% url 'atendimentos:pacientes' %}" {% if modulo == 'pacientes' %}aria-current="page"{% endif %}>Pacientes</a></li><li><a href="{% url 'atendimentos:triagem' %}" {% if modulo == 'triagem' %}aria-current="page"{% endif %}>Triagem/Fila</a></li><li><a href="{% url 'atendimentos:medicos' %}" {% if modulo == 'medicos' %}aria-current="page"{% endif %}>Médicos</a></li><li><a href="{% url 'atendimentos:atendimentos' %}" {% if modulo == 'atendimentos' %}aria-current="page"{% endif %}>Atendimentos</a></li><li><a href="{% url 'atendimentos:historico' %}" {% if modulo == 'historico' %}aria-current="page"{% endif %}>Histórico</a></li></ul></nav>
-    <main id="conteudo" tabindex="-1">
-        {% for message in messages %}<p role="status" class="aviso">{{ message }}</p>{% endfor %}
-        {% if erro_acao %}<p role="alert" class="erro">{{ erro_acao }}</p>{% endif %}
-        {% block content %}{% endblock %}
-    </main>
-    <footer>Uso exclusivo como simulador acadêmico. Utilize somente dados fictícios.</footer>
+    <aside class="sidebar" aria-label="Navegação principal">
+        <a class="marca" href="{% url 'atendimentos:inicio' %}"><span class="simbolo" aria-hidden="true">+</span><span>SIGAE <small>Gestão de atendimentos</small></span></a>
+        <p class="nav-titulo">ÁREA ASSISTENCIAL</p>
+        <nav aria-label="Módulos"><ul class="navegacao">
+            <li><a href="{% url 'atendimentos:inicio' %}" {% if modulo == 'inicio' %}aria-current="page"{% endif %}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z"/></svg>Painel geral</a></li>
+            <li><a href="{% url 'atendimentos:pacientes' %}" {% if modulo == 'pacientes' %}aria-current="page"{% endif %}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M4 21v-3a8 6 0 0 1 16 0v3"/></svg>Pacientes</a></li>
+            <li><a href="{% url 'atendimentos:triagem' %}" {% if modulo == 'triagem' %}aria-current="page"{% endif %}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 5h12 M9 12h12 M9 19h12 M3 5h1 M3 12h1 M3 19h1"/></svg>Triagem/Fila</a></li>
+            <li><a href="{% url 'atendimentos:medicos' %}" {% if modulo == 'medicos' %}aria-current="page"{% endif %}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3H4v6a5 5 0 0 0 10 0V3h-4 M9 14v2a5 5 0 0 0 10 0v-3 M21 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0"/></svg>Médicos</a></li>
+            <li><a href="{% url 'atendimentos:atendimentos' %}" {% if modulo == 'atendimentos' %}aria-current="page"{% endif %}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Atendimentos</a></li>
+            <li><a href="{% url 'atendimentos:historico' %}" {% if modulo == 'historico' %}aria-current="page"{% endif %}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 11a9 9 0 1 1 2 7 M3 4v7h7 M12 7v5l4 2"/></svg>Histórico</a></li>
+        </ul></nav>
+        <div class="sidebar-nota"><strong>Ambiente acadêmico</strong><span>Utilize somente dados fictícios.</span></div>
+    </aside>
+    <div class="area-principal">
+        <header class="cabecalho"><span>Gestão hospitalar <span class="separador" aria-hidden="true">/</span> Emergência</span><span class="selo">Simulador acadêmico</span></header>
+        <main id="conteudo" tabindex="-1">
+            {% for message in messages %}<p role="{% if message.level_tag == 'error' %}alert{% else %}status{% endif %}" class="aviso {{ message.tags }}">{{ message }}</p>{% endfor %}
+            {% if erro_acao %}<p role="alert" class="erro">{{ erro_acao }}</p>{% endif %}
+            {% block content %}{% endblock %}
+        </main>
+        <footer>SIGAE WEB · Uso exclusivo como simulador acadêmico. Utilize somente dados fictícios.</footer>
+    </div>
 </body>
 </html>

@@ -1,16 +1,17 @@
 {% extends "atendimentos/base.html" %}
 {% block title %}Triagem e fila · SIGAE WEB{% endblock %}
 {% block content %}
-<h1>Triagem e fila</h1>
+<div class="titulo-pagina"><div><p class="sobretitulo">Classificação e encaminhamento</p><h1>Triagem e fila</h1><p class="descricao">Revise o risco e encaminhe o próximo paciente para um médico disponível.</p></div></div>
+{% include "atendimentos/partes/legenda.html" %}
 <div class="grade">
     <section class="cartao">
-        <h2>Próxima chamada</h2>
+        <h2>Próxima chamada</h2><p class="ajuda">A seleção considera a classificação de risco e a ordem de chegada.</p>
         {% if proximo_paciente %}
-        <p><strong>{{ proximo_paciente.nome }}</strong> · ID {{ proximo_paciente.id }} · {{ proximo_paciente.risco }}</p>
-        {% else %}<p class="vazio">Nenhum paciente aguardando.</p>{% endif %}
+        <p><strong>{{ proximo_paciente.nome }}</strong> · ID {{ proximo_paciente.id }} · {% include "atendimentos/partes/risco.html" with risco=proximo_paciente.risco only %}</p>
+        {% else %}<p class="vazio"><strong>Nenhum paciente aguardando.</strong>Novos pacientes cadastrados entram na fila de espera.</p>{% endif %}
         {% if proximo_medico %}
         <p>Médico disponível para a próxima chamada: <strong>{{ proximo_medico.nome }}</strong>.</p>
-        {% else %}<p class="vazio">Nenhum médico disponível.</p>{% endif %}
+        {% else %}<p class="vazio"><strong>Nenhum médico disponível.</strong>Confira a situação da equipe no módulo Médicos.</p>{% endif %}
         <form method="post" action="{% url 'atendimentos:acao' 'triagem' 'chamar' %}">
             {% csrf_token %}
             <button{% if not proximo_paciente or not proximo_medico %} disabled{% endif %}>Chamar próximo</button>
@@ -19,10 +20,10 @@
     <section class="cartao">
         <h2>Reclassificar paciente</h2>
         <form method="post" action="{% url 'atendimentos:acao' 'triagem' 'reclassificar' %}">
-            {% csrf_token %}{{ reclassificacao.as_div }}
+            {% csrf_token %}{% include "atendimentos/partes/formulario_risco.html" with formulario=reclassificacao only %}
             <button>Reclassificar</button>
         </form>
     </section>
 </div>
-{% include "atendimentos/partes/pacientes.html" with linhas=fila titulo="Fila de espera por horário de chegada" only %}
+{% include "atendimentos/partes/pacientes.html" with linhas=fila titulo="Fila de espera por horário de chegada" cancelar=True retorno="triagem" csrf_token=csrf_token only %}
 {% endblock %}

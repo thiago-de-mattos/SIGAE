@@ -1,25 +1,25 @@
 {% extends "atendimentos/base.html" %}
 {% block title %}Médicos · SIGAE WEB{% endblock %}
 {% block content %}
-<h1>Médicos</h1>
+<div class="titulo-pagina"><div><p class="sobretitulo">Equipe assistencial</p><h1>Médicos</h1><p class="descricao">Cadastre profissionais e consulte a disponibilidade e os atendimentos concluídos.</p></div></div>
 <div class="grade">
-    <section class="cartao">
-        <h2>Cadastrar médico</h2>
-        <form method="post" action="{% url 'atendimentos:acao' 'medicos' 'cadastrar' %}">
+    <section class="cartao" id="cadastro">
+        <h2>Cadastrar médico</h2><p class="ajuda">Identifique o profissional pelo nome e registro fictício. Todos os campos são obrigatórios.</p>
+        <form class="formulario-grade" method="post" action="{% url 'atendimentos:acao' 'medicos' 'cadastrar' %}">
             {% csrf_token %}{{ cadastro.as_div }}
             <button>Cadastrar médico</button>
         </form>
     </section>
     <section class="cartao">
-        <h2>Consultar médico</h2>
-        <form method="get" action="{% url 'atendimentos:medicos' %}">
+        <h2>Consultar médico</h2><p class="ajuda">Use o ID exibido na lista de médicos.</p>
+        <form class="busca-inline" method="get" action="{% url 'atendimentos:medicos' %}">
             {{ busca.as_div }}
             <button>Consultar médico</button>
         </form>
-        {% if resultado %}
+        {% if resultado %}<div class="resultado" role="status"><span class="sobretitulo">Registro encontrado</span>
         <p><strong>{{ resultado.nome }}</strong> · ID {{ resultado.id }} · {{ resultado.registro }}</p>
-        <p>{{ resultado.situacao }} · {{ resultado.total }} atendimento{{ resultado.total|pluralize }} concluído{{ resultado.total|pluralize }}</p>
-        {% endif %}
+        <p>{% include "atendimentos/partes/situacao.html" with situacao=resultado.situacao only %} · {{ resultado.total }} atendimento{{ resultado.total|pluralize }} concluído{{ resultado.total|pluralize }}</p>
+        </div>{% endif %}
     </section>
 </div>
 <div class="tabela" role="region" aria-label="Médicos cadastrados" tabindex="0">
@@ -28,9 +28,9 @@
     <thead><tr><th scope="col">ID</th><th scope="col">Médico</th><th scope="col">Registro</th><th scope="col">Situação</th><th scope="col">Concluídos</th><th scope="col">Última atribuição</th></tr></thead>
     <tbody>
     {% for medico in medicos %}
-    <tr><td>{{ medico.id }}</td><th scope="row">{{ medico.nome }}</th><td>{{ medico.registro }}</td><td>{{ medico.situacao }}</td><td>{{ medico.total }}</td><td>{{ medico.ultima_atribuicao|date:"d/m/Y H:i"|default:"—" }}</td></tr>
+    <tr><td>{{ medico.id }}</td><th scope="row">{{ medico.nome }}</th><td>{{ medico.registro }}</td><td>{% include "atendimentos/partes/situacao.html" with situacao=medico.situacao only %}</td><td>{{ medico.total }}</td><td>{{ medico.ultima_atribuicao|date:"d/m/Y H:i"|default:"—" }}</td></tr>
     {% empty %}
-    <tr><td colspan="6" class="vazio">Nenhum médico cadastrado.</td></tr>
+    <tr><td colspan="6" class="vazio"><strong>Nenhum médico cadastrado.</strong></td></tr>
     {% endfor %}
     </tbody>
 </table>

@@ -1,15 +1,74 @@
 {% extends "atendimentos/base.html" %}
+{% load static %}
 {% block title %}Painel geral · SIGAE WEB{% endblock %}
 {% block content %}
-<h1>Painel geral</h1>
-<h2>Pacientes por situação</h2>
-<ul class="modulos indicadores">
-    {% for situacao, total in estados_pacientes %}<li><strong>{{ total }}</strong><span>{{ situacao }}</span></li>{% endfor %}
-</ul>
-<h2>Médicos por situação</h2>
-<ul class="modulos indicadores">
-    {% for situacao, total in estados_medicos %}<li><strong>{{ total }}</strong><span>{{ situacao }}</span></li>{% endfor %}
-</ul>
-{% include "atendimentos/partes/conclusoes.html" %}
-{% include "atendimentos/partes/pacientes.html" with linhas=chegadas titulo="Chegadas por ordem cronológica" only %}
+<link rel="stylesheet" href="{% static 'atendimentos/painel.css' %}">
+<script src="{% static 'atendimentos/painel.js' %}" defer></script>
+<div class="painel-operacoes">
+    <header class="titulo-pagina">
+        <div><p class="sobretitulo">Central de operações</p><h1>Painel geral</h1><p class="descricao">Pacientes, equipe e atendimento em uma visão integrada.</p></div>
+        <a class="botao" href="{% url 'atendimentos:pacientes' %}#cadastro"><span aria-hidden="true">+</span> Novo paciente</a>
+    </header>
+    <ul class="modulos indicadores resumo-operacional" aria-label="Indicadores operacionais">
+        {% for situacao, total in estados_pacientes %}<li><strong>{{ total }}</strong><span>{% if situacao == 'Concluído' %}Concluídos{% elif situacao == 'Cancelado' %}Cancelados{% else %}{{ situacao }}{% endif %}</span></li>{% endfor %}
+        {% for situacao, total in estados_medicos %}<li><strong>{{ total }}</strong><span>{% if situacao == 'Disponível' %}Médicos disponíveis{% else %}Médicos ocupados{% endif %}</span></li>{% endfor %}
+    </ul>
+    <nav class="atalhos-operacionais" aria-label="Ações rápidas">
+        <a href="{% url 'atendimentos:pacientes' %}#cadastro">Cadastrar paciente</a>
+        <a href="{% url 'atendimentos:medicos' %}#cadastro">Cadastrar médico</a>
+        <a href="{% url 'atendimentos:triagem' %}">Reclassificar paciente</a>
+        <a href="{% url 'atendimentos:triagem' %}">Triagem</a>
+        <a href="{% url 'atendimentos:atendimentos' %}">Atendimentos</a>
+        <a href="{% url 'atendimentos:historico' %}">Histórico</a>
+    </nav>
+    <div class="operacao-grid">
+        <section class="cartao">
+            <h2>Fila cronológica de espera</h2>
+            <p class="ajuda">Consulte os pacientes aguardando, na ordem de chegada, na tela de triagem.</p>
+            <a class="botao neutro" href="{% url 'atendimentos:triagem' %}">Consultar fila <span aria-hidden="true">→</span></a>
+        </section>
+        <section class="cartao">
+            <h2>Próxima chamada</h2>
+            <p class="ajuda">Confira paciente, risco, chegada e médico elegível na triagem antes de chamar.</p>
+            <a class="botao" href="{% url 'atendimentos:triagem' %}">Abrir triagem <span aria-hidden="true">→</span></a>
+        </section>
+    </div>
+    <section class="cartao ativos-painel">
+        <div><h2>Atendimentos ativos</h2><p class="ajuda">Consulte pacientes, médicos e horários de início para concluir ou cancelar atendimentos.</p></div>
+        <a class="botao neutro" href="{% url 'atendimentos:atendimentos' %}">Ver atendimentos <span aria-hidden="true">→</span></a>
+    </section>
+    <div class="analise-grid">
+        <section class="cartao" aria-labelledby="riscos-painel">
+            <h2 id="riscos-painel">Risco dos pacientes aguardando</h2>
+            <p class="ajuda">Distribuição por classificação na abertura do painel.</p>
+            <div hidden data-pacientes-aguardando>{% for p in chegadas %}{% if p.situacao == 'Aguardando' %}<span data-risco="{{ p.risco|slice:':1' }}"></span>{% endif %}{% endfor %}</div>
+            <div class="distribuicao-risco" hidden>
+                {% include "atendimentos/partes/painel_risco.html" with nivel="1" texto="Emergência" only %}
+                {% include "atendimentos/partes/painel_risco.html" with nivel="2" texto="Muito urgente" only %}
+                {% include "atendimentos/partes/painel_risco.html" with nivel="3" texto="Urgente" only %}
+                {% include "atendimentos/partes/painel_risco.html" with nivel="4" texto="Pouco urgente" only %}
+                {% include "atendimentos/partes/painel_risco.html" with nivel="5" texto="Não urgente" only %}
+                <p class="ajuda" data-fila-vazia hidden>Nenhum paciente aguardando.</p>
+            </div>
+            <noscript><p class="ajuda">A distribuição visual requer JavaScript. Consulte os riscos na <a href="{% url 'atendimentos:triagem' %}">triagem</a>.</p></noscript>
+        </section>
+        <section class="cartao" aria-labelledby="equipe-painel">
+            <h2 id="equipe-painel">Disponibilidade médica</h2>
+            <ul class="lista-equipe">
+                {% for medico in medicos %}<li><span><strong>{{ medico.nome }}</strong><small>ID {{ medico.id }} · {{ medico.registro }}</small></span>{% include "atendimentos/partes/situacao.html" with situacao=medico.situacao only %}</li>
+                {% empty %}<li class="vazio">Nenhum médico cadastrado.</li>{% endfor %}
+            </ul>
+            <a class="link-acao" href="{% url 'atendimentos:medicos' %}">Consultar equipe →</a>
+        </section>
+    </div>
+    <section class="tabela" role="region" aria-label="Conclusões por médico" tabindex="0">
+        <table>
+            <caption>Conclusões por médico</caption>
+            <thead><tr><th scope="col">ID</th><th scope="col">Médico</th><th scope="col">Atendimentos concluídos</th></tr></thead>
+            <tbody>{% for medico in medicos %}<tr><td>{{ medico.id }}</td><th scope="row">{{ medico.nome }}</th><td><div class="conclusao-visual" data-conclusoes="{{ medico.total }}"><strong>{{ medico.total }}</strong><span class="trilho-conclusoes" hidden aria-hidden="true"><span></span></span></div></td></tr>
+            {% empty %}<tr><td colspan="3" class="vazio">Nenhum médico cadastrado. <a href="{% url 'atendimentos:medicos' %}#cadastro">Cadastrar médico</a></td></tr>{% endfor %}</tbody>
+        </table>
+    </section>
+    {% include "atendimentos/partes/pacientes.html" with linhas=chegadas titulo="Chegadas por ordem cronológica" only %}
+</div>
 {% endblock %}
