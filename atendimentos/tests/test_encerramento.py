@@ -5,7 +5,7 @@ from unittest.mock import patch
 from atendimentos.domain.atendimento import Atendimento, SituacaoAtendimento
 from atendimentos.domain.medico import SituacaoMedico
 from atendimentos.domain.paciente import SituacaoPaciente
-from atendimentos.services.sistema_atendimento import SistemaAtendimento
+from atendimentos.services.sistema_atendimento import SistemaAtendimento, SistemaIndisponivel
 
 
 INICIO = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -243,12 +243,17 @@ class EncerramentoTests(TestCase):
         self.assertEqual(capturado.exception.exceptions, (erro, recuperacao))
         self.assertEqual(a.medico.total_concluidos, 0)
         self.assertIsNone(a.fim)
-        self.conferir(s)
+        with self.assertRaises(SistemaIndisponivel):
+            s.listar_pacientes()
+        s = self.preparar()
+        paciente = s.buscar_paciente(4)
         with patch.object(s._arvore_espera, 'remover', side_effect=erro), patch.object(s._heap_pacientes, 'inserir', side_effect=recuperacao):
             with self.assertRaises(ExceptionGroup) as capturado:
                 s.cancelar_paciente(4, FIM)
         self.assertIn(recuperacao, capturado.exception.exceptions)
-        self.assertEqual(s.buscar_paciente(4).situacao, SituacaoPaciente.AGUARDANDO)
+        self.assertEqual(paciente.situacao, SituacaoPaciente.AGUARDANDO)
+        with self.assertRaises(SistemaIndisponivel):
+            s.listar_fila()
 
     def test_restauracao_de_contador_positivo_e_solicitacao_antiga(self):
         s = SistemaAtendimento()

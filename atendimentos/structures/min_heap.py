@@ -41,6 +41,10 @@ class MinHeap(Generic[Registro]):
     def consultar_minimo(self) -> Registro | None:
         return self._itens[0] if self._itens else None
 
+    def listar_itens(self) -> list[Registro]:
+        """Copia as referências do Heap para conferência dos índices."""
+        return self._itens.copy()
+
     def _trocar(self, a: int, b: int) -> None:
         self._itens[a], self._itens[b] = self._itens[b], self._itens[a]
         self._posicoes.atualizar(self._itens[a].id, a)
