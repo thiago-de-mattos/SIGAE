@@ -1,6 +1,6 @@
 """Árvore Rubro-Negra própria para o índice cronológico de pacientes."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from atendimentos.contratos import ChaveChegada
 from atendimentos.domain.paciente import Paciente
@@ -43,8 +43,16 @@ class ArvoreRubroNegra:
                 or type(chave[1]) is not int or chave[1] <= 0):
             raise ValueError("A chave deve ser (chegada com fuso, ID positivo).")
 
+    @classmethod
+    def _normalizar_chave(cls, chave):
+        cls._validar_chave(chave)
+        try:
+            return chave[0].astimezone(timezone.utc), chave[1]
+        except (OverflowError, ValueError) as erro:
+            raise ValueError("A chegada deve ser representável em UTC.") from erro
+
     def _buscar_no(self, chave):
-        self._validar_chave(chave)
+        chave = self._normalizar_chave(chave)
         no = self._raiz
         while no is not self._nil:
             if chave == no.chave:
@@ -86,7 +94,7 @@ class ArvoreRubroNegra:
         no.pai = filho
 
     def inserir(self, chave: ChaveChegada, paciente: Paciente) -> None:
-        self._validar_chave(chave)
+        chave = self._normalizar_chave(chave)
         if not isinstance(paciente, Paciente) or chave != paciente.chave_chegada:
             raise ValueError("Chave divergente do paciente.")
         pai = self._nil

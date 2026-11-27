@@ -1,6 +1,6 @@
 """Registro de atendimento; a coordenação das entidades pertence ao serviço."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 
 from .medico import Medico
@@ -21,7 +21,7 @@ class Atendimento:
             raise ValueError("O paciente deve ser uma entidade Paciente válida.")
         if not isinstance(medico, Medico):
             raise ValueError("O médico deve ser uma entidade Medico válida.")
-        self._validar_horario(inicio)
+        self._inicio_utc = self._validar_horario(inicio)
 
         self._id = id
         self._paciente = paciente
@@ -31,9 +31,13 @@ class Atendimento:
         self._situacao = SituacaoAtendimento.EM_ATENDIMENTO
 
     @staticmethod
-    def _validar_horario(horario: datetime) -> None:
+    def _validar_horario(horario: datetime) -> datetime:
         if not isinstance(horario, datetime) or horario.utcoffset() is None:
             raise ValueError("O horário deve ser uma data e horário com fuso horário.")
+        try:
+            return horario.astimezone(timezone.utc)
+        except (OverflowError, ValueError) as erro:
+            raise ValueError("O horário deve ser representável em UTC.") from erro
 
     @property
     def id(self) -> int:
@@ -52,6 +56,10 @@ class Atendimento:
         return self._inicio
 
     @property
+    def chave_inicio(self) -> tuple[datetime, int]:
+        return self._inicio_utc, self.id
+
+    @property
     def fim(self) -> datetime | None:
         return self._fim
 
@@ -62,8 +70,7 @@ class Atendimento:
     def _encerrar(self, fim: datetime, situacao: SituacaoAtendimento) -> None:
         if self.situacao != SituacaoAtendimento.EM_ATENDIMENTO:
             raise ValueError("Somente um atendimento ativo pode ser encerrado.")
-        self._validar_horario(fim)
-        if fim < self.inicio:
+        if self._validar_horario(fim) < self._inicio_utc:
             raise ValueError("O encerramento não pode anteceder o início.")
         self._fim = fim
         self._situacao = situacao

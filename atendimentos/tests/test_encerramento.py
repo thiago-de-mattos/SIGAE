@@ -1,3 +1,4 @@
+from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone
 from unittest import TestCase
 from unittest.mock import patch
@@ -286,3 +287,31 @@ class EncerramentoTests(TestCase):
         self.assertEqual(atual.medico.total_concluidos, 1)
         self.assertEqual(atual.medico.ultima_atribuicao, FIM)
         self.conferir(s)
+
+    def test_encerramentos_rejeitam_instantes_anteriores_na_hora_repetida(self):
+        fuso = ZoneInfo("America/New_York")
+        cedo = datetime(2026, 11, 1, 1, 30, tzinfo=fuso)
+        tarde = cedo.replace(fold=1)
+        sistema = SistemaAtendimento()
+        paciente = sistema.cadastrar_paciente("Ana", tarde, 1)
+        sistema.cadastrar_medico("Lia", "FICT-001")
+
+        with self.assertRaisesRegex(ValueError, "anteceder"):
+            sistema.cancelar_paciente(paciente.id, cedo)
+        self.assertEqual(sistema.listar_fila(), [paciente])
+        atendimento = sistema.chamar_proximo(tarde)
+
+        for operacao, id in (
+            (sistema.concluir_atendimento, atendimento.id),
+            (sistema.cancelar_atendimento, atendimento.id),
+            (sistema.cancelar_paciente, paciente.id),
+        ):
+            with self.subTest(operacao=operacao.__name__):
+                with self.assertRaisesRegex(ValueError, "anteceder"):
+                    operacao(id, cedo)
+                self.assertEqual(sistema.listar_atendimentos_ativos(), [atendimento])
+                self.assertIsNone(atendimento.fim)
+
+        sistema.concluir_atendimento(atendimento.id, tarde.astimezone(timezone.utc))
+        self.assertEqual(atendimento.medico.total_concluidos, 1)
+        sistema.validar_indices()

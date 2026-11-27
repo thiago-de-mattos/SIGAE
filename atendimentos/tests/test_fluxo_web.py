@@ -118,3 +118,15 @@ class FluxoWebTests(SimpleTestCase):
         self.assertEqual(sistema.listar_fila(), [paciente])
         self.assertIs(sistema.consultar_proximo_medico(), medico)
         sistema.validar_indices()
+
+    def test_chegada_fora_do_intervalo_de_brasilia_nao_compromete_as_paginas(self):
+        resposta = self.enviar("pacientes", "cadastrar", **{
+            "cadastro-nome": "Ana",
+            "cadastro-chegada": "0001-01-01T00:00+00:00",
+            "cadastro-prioridade": 1,
+        })
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn("chegada", resposta.context["cadastro"].errors)
+        self.assertEqual(estado.obter_sistema().listar_pacientes(), [])
+        self.assertEqual(self.operador.get("/pacientes/").status_code, 200)
+        self.assertRedirects(self.paciente("Ana", 1), "/pacientes/")
