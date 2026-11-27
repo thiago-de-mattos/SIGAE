@@ -1,0 +1,120 @@
+import re
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from threading import Barrier
+from unittest.mock import patch
+
+from django.test import Client, SimpleTestCase
+
+from atendimentos.services import estado
+
+
+class FluxoWebTests(SimpleTestCase):
+    def setUp(self):
+        provedor = patch.object(estado, "_sistema", None)
+        provedor.start()
+        self.addCleanup(provedor.stop)
+        self.operador = Client(enforce_csrf_checks=True)
+        self.operador.get("/pacientes/")
+        self.token = self.operador.cookies["csrftoken"].value
+
+    def enviar(self, modulo, acao, **dados):
+        return self.operador.post(
+            f"/{modulo}/{acao}/", {**dados, "csrfmiddlewaretoken": self.token}
+        )
+
+    def paciente(self, nome, risco):
+        return self.enviar("pacientes", "cadastrar", **{
+            "cadastro-nome": nome,
+            "cadastro-chegada": "2024-10-01T10:00",
+            "cadastro-prioridade": risco,
+        })
+
+    def medico(self, nome):
+        return self.enviar("medicos", "cadastrar", **{
+            "cadastro-nome": nome,
+            "cadastro-registro": f"FICT-{nome}",
+        })
+
+    def test_fluxo_compartilhado_com_tres_medicos_e_historico(self):
+        for nome in ("Alfa", "Beta", "Gama"):
+            self.assertRedirects(self.medico(nome), "/medicos/")
+
+        for nome, risco in (("Ana", 5), ("Bia", 2), ("Cris", 2), ("Dani", 3)):
+            self.assertRedirects(self.paciente(nome, risco), "/pacientes/")
+
+        self.assertRedirects(self.enviar("triagem", "reclassificar", **{
+            "reclassificacao-id": 4, "reclassificacao-prioridade": 1,
+        }), "/triagem/")
+        outro_operador = Client()
+        triagem = outro_operador.get("/triagem/")
+        self.assertEqual(triagem.context["proximo_paciente"]["nome"], "Dani")
+        self.assertContains(outro_operador.get("/medicos/?id=2"), "FICT-Beta")
+
+        for paciente, medico in (("Dani", "Alfa"), ("Bia", "Beta"), ("Cris", "Gama")):
+            self.assertRedirects(self.enviar("triagem", "chamar"), "/atendimentos/")
+            ativos = outro_operador.get("/atendimentos/").context["ativos"]
+            self.assertEqual((ativos[-1]["paciente"]["nome"], ativos[-1]["medico"]["nome"]),
+                             (paciente, medico))
+
+        self.assertContains(self.enviar("triagem", "chamar"), "médico disponível", status_code=400)
+        self.assertEqual([p["nome"] for p in outro_operador.get("/triagem/").context["fila"]], ["Ana"])
+
+        self.assertRedirects(self.enviar("atendimentos", "concluir", id=1), "/atendimentos/")
+        self.assertEqual(self.enviar("atendimentos", "concluir", id=1).status_code, 400)
+        self.assertRedirects(self.enviar("atendimentos", "cancelar", id=2), "/atendimentos/")
+        self.assertEqual(outro_operador.get("/triagem/").context["proximo_medico"]["nome"], "Beta")
+        self.assertRedirects(self.enviar("triagem", "chamar"), "/atendimentos/")
+        contexto = outro_operador.get("/historico/").context
+        self.assertEqual([a["situacao"] for a in contexto["historico"]], ["Concluído", "Cancelado"])
+        self.assertEqual([m["total"] for m in contexto["medicos"]], [1, 0, 0])
+        estado.obter_sistema().validar_indices()
+
+    def test_formulario_invalido_e_cancelamentos_usam_csrf_e_ids_corretos(self):
+        falha = self.paciente(" ", 6)
+        self.assertEqual(falha.status_code, 400)
+        self.assertEqual(set(falha.context["cadastro"].errors), {"nome", "prioridade"})
+        self.assertContains(self.operador.get("/pacientes/?id=1"), "Registro não encontrado.")
+
+        self.assertRedirects(self.paciente("Paciente em espera", 5), "/pacientes/")
+        self.assertEqual(self.operador.post("/pacientes/cancelar/", {"id": 1}).status_code, 403)
+        self.assertEqual(self.operador.get("/pacientes/cancelar/").status_code, 405)
+        self.assertEqual(self.enviar("atendimentos", "cancelar", id=1).status_code, 400)
+        pagina = self.operador.get("/pacientes/").content.decode()
+        formulario = pagina.split('action="/pacientes/cancelar/"', 1)[1].split("</form>", 1)[0]
+        token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', formulario)
+        self.assertIsNotNone(token)
+        resposta = self.operador.post("/pacientes/cancelar/", {
+            "id": 1, "csrfmiddlewaretoken": token.group(1),
+        })
+        self.assertRedirects(resposta, "/pacientes/")
+        self.assertContains(self.operador.get("/pacientes/?id=1"), "Cancelado")
+        self.assertEqual(self.operador.get("/historico/").context["historico"], [])
+
+    def test_chamadas_web_concorrentes_criam_um_atendimento(self):
+        self.assertRedirects(self.paciente("Ana", 3), "/pacientes/")
+        self.assertRedirects(self.medico("Alfa"), "/medicos/")
+        barreira = Barrier(2)
+
+        def chamar():
+            cliente = Client()
+            barreira.wait(timeout=5)
+            return cliente.post("/triagem/chamar/").status_code
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            resultados = list(executor.map(lambda _: chamar(), range(2)))
+        self.assertCountEqual(resultados, [302, 400])
+        sistema = estado.obter_sistema()
+        self.assertEqual(len(sistema.listar_atendimentos_ativos()), 1)
+        sistema.validar_indices()
+
+    def test_inicio_anterior_a_chegada_preserva_fila_e_medico(self):
+        sistema = estado.obter_sistema()
+        chegada = datetime(2024, 10, 1, tzinfo=timezone.utc)
+        paciente = sistema.cadastrar_paciente("Ana", chegada, 1)
+        medico = sistema.cadastrar_medico("Alfa", "FICT-A")
+        with self.assertRaisesRegex(ValueError, "anteceder a chegada"):
+            sistema.chamar_proximo(chegada - timedelta(seconds=1))
+        self.assertEqual(sistema.listar_fila(), [paciente])
+        self.assertIs(sistema.consultar_proximo_medico(), medico)
+        sistema.validar_indices()

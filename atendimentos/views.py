@@ -82,7 +82,6 @@ def contexto_modulo(request, sistema, modulo):
             "fila": [dados_paciente(p) for p in sistema.listar_fila()],
             "proximo_paciente": dados_paciente(paciente) if paciente else None,
             "proximo_medico": dados_medico(medico) if medico else None,
-            "riscos": RISCOS.values(),
         }
     if modulo == "atendimentos":
         ativos = sorted(sistema.listar_atendimentos_ativos(), key=lambda a: a.id)
@@ -129,7 +128,7 @@ ACOES = {
     ("triagem", "chamar"): (None, None, "chamar_proximo", "Atendimento iniciado."),
     ("medicos", "cadastrar"): (MedicoForm, "cadastro", "cadastrar_medico", "Médico cadastrado."),
     ("atendimentos", "concluir"): (BuscaForm, None, "concluir_atendimento", "Atendimento concluído."),
-    ("atendimentos", "cancelar"): (BuscaForm, None, "cancelar_paciente", "Atendimento cancelado."),
+    ("atendimentos", "cancelar"): (BuscaForm, None, "cancelar_atendimento", "Atendimento cancelado."),
 }
 
 

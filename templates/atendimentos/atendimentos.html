@@ -17,7 +17,7 @@
                 <button aria-label="Concluir atendimento {{ atendimento.id }}">Concluir</button>
             </form>
             <form method="post" action="{% url 'atendimentos:acao' 'atendimentos' 'cancelar' %}">
-                {% csrf_token %}<input type="hidden" name="id" value="{{ atendimento.paciente.id }}">
+                {% csrf_token %}<input type="hidden" name="id" value="{{ atendimento.id }}">
                 <button class="secundario" aria-label="Cancelar atendimento {{ atendimento.id }}">Cancelar</button>
             </form>
         </td>
