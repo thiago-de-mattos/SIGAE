@@ -5,24 +5,29 @@
 Este documento define as interfaces e responsabilidades para o SIGAE WEB.
 Não representa a implementação completa do sistema.
 
-- Existentes: base Django, classe `Paciente`, `TabelaHash`, `MinHeap` e
-  `ArvoreRubroNegra`, com testes unitários. As estruturas são independentes das
-  views e ainda não estão coordenadas por um serviço de atendimento.
+- Existentes: base Django, entidades `Paciente`, `Medico` e `Atendimento`,
+  `TabelaHash`, `MinHeap`, `ArvoreRubroNegra` e `SistemaAtendimento`. O serviço
+  coordena entidades e estruturas em memória, independentemente das views.
 - Interface existente: seis protótipos navegáveis — Painel geral, Pacientes,
   Triagem/Fila, Médicos, Atendimentos e Histórico — com dados fictícios estáticos,
   views somente GET e ações de negócio desabilitadas. Telas, URLs, limitações e
   revisão pendente estão em [prototipos.md](prototipos.md).
 - Contratos: `Identificavel`, `ContratoHash`, `ContratoHeap` e `ContratoArvore`
   em `atendimentos/contratos.py` (Protocols do Python).
-- Planejados: `Medico`, `Atendimento`, `SistemaAtendimento`, formulários e
-  integração das operações com a interface e os índices.
-- Estado entre requisições: estratégia documentada na SIGAE-10 abaixo;
-  implementação futura.
-- Integração e recuperação de falhas: SIGAE-19 e SIGAE-20.
+- Implementados no serviço: IDs, cadastros, consultas, triagem no cadastro,
+  reclassificação, chamada, distribuição médica, conclusão, cancelamento,
+  históricos e indicadores, com compensação local em caso de falha.
+- Pendentes: formulários e integração das operações com a interface WEB.
+- SIGAE-20: instância compartilhada entre requisições, concorrência, locks,
+  rollback centralizado e indisponibilidade após falha de recuperação.
+- Validação da SIGAE-19: 160 testes aprovados, incluindo três novos cenários
+  integrados da SIGAE-19.9 sobre os 157 testes anteriores. Validam fluxo,
+  distribuição, referências, invariantes, colisões, redimensionamentos e
+  recuperação local; não comprovam concorrência ou integração WEB.
 
 Um Protocol descreve métodos e tipos para análise estática. Não implementa
 algoritmos, não verifica regras de negócio em execução e não exige herança
-explícita. Os testes das implementações deverão comprovar os comportamentos.
+explícita. Os testes das implementações verificam os comportamentos no recorte existente.
 
 ## Organização dos arquivos
 
@@ -40,12 +45,20 @@ explícita. Os testes das implementações deverão comprovar os comportamentos.
 | `atendimentos/tests/` | Testes de entidades, estruturas, integração e interface |
 
 As views atuais apenas renderizam os protótipos e não alteram entidades ou índices.
-Na integração futura, o serviço controlará as operações completas. Domínio e
+O serviço já controla as operações completas em execução sequencial; a integração
+com as views é futura. Domínio e
 estruturas não importam views, formulários ou modelos do Django. O serviço não
 deverá ser recriado com filas vazias a cada requisição; sua instância seguirá a
 estratégia em memória da SIGAE-10 abaixo, sem persistência.
 
 ## SIGAE-10 — Estado em memória e acesso entre requisições
+
+A SIGAE-19 mantém o estado enquanto a instância do serviço existir; instâncias
+separadas possuem índices e contadores independentes. As compensações locais
+restauram valores nas entidades originais e recompõem índices recuperáveis pelas
+APIs existentes. IDs reservados não são reutilizados. Falhas de recuperação são
+propagadas por `ExceptionGroup`, sem bloqueio automático do serviço. O provedor,
+os locks e o mecanismo centralizado descritos a seguir são pendências da SIGAE-20.
 
 ### Ciclo de vida e acesso pelas views
 
@@ -108,11 +121,12 @@ O lock impede interferência concorrente, mas não desfaz alterações sozinho.
 Na integração das estruturas existentes, deverá ser garantido que falhas em uma
 mutação sejam recuperáveis, inclusive quando ocorram antes de o método retornar.
 Os Protocols atuais não oferecem transações nem restauração de entidades.
-A implementação do mecanismo interno de recuperação ficará na integração
-SIGAE-19/SIGAE-20, sem alterar agora as assinaturas públicas. Restaurar estado
+A recuperação local está implementada na SIGAE-19; a coordenação sob lock e o
+rollback centralizado permanecem para a SIGAE-20, preservando os contratos. Restaurar estado
 não significa executar transições de negócio proibidas nem substituir entidades
-por cópias independentes. Testes futuros deverão injetar falhas entre etapas e
-verificar invariantes, identidade das referências e comportamento concorrente.
+por cópias independentes. Os testes existentes injetam falhas entre etapas e
+verificam invariantes e identidade das referências. Testes de comportamento
+concorrente permanecem futuros.
 
 ### Limitações e compatibilidade
 
@@ -156,7 +170,7 @@ Campos: `id: int`, `nome: str`, `chegada: datetime`, `prioridade: int`,
 Os métodos da entidade não atualizam estruturas. O serviço deve coordená-los
 com a fila, os vínculos e a recuperação de falhas.
 
-### Medico — planejado
+### Medico — implementado
 
 Campos: `id: int`, `nome: str`, `registro: str`, `situacao: SituacaoMedico`,
 `total_concluidos: int`, `ultima_atribuicao: datetime | None`.
@@ -172,7 +186,7 @@ Campos: `id: int`, `nome: str`, `registro: str`, `situacao: SituacaoMedico`,
 O serviço valida o atendimento associado antes de executar esses métodos,
 evitando que uma solicitação antiga encerre uma consulta nova.
 
-### Atendimento — planejado
+### Atendimento — implementado
 
 Campos: `id: int`, `paciente: Paciente`, `medico: Medico`,
 `inicio: datetime`, `fim: datetime | None`, `situacao: SituacaoAtendimento`.
@@ -243,14 +257,14 @@ buckets internos; seus elementos continuam sendo referências às entidades.
   do item. Usa lista e Hash própria de posições. A função deve ser determinística
   e não alterar o item. Trocas atualizam as duas posições na Hash. Implementa
   `ContratoHeap`; os critérios de pacientes e médicos são configurados pelo
-  chamador. Os testes médicos usam objetos fictícios, pois `Medico` ainda não existe.
+  chamador. Há testes com objetos fictícios e com a entidade `Medico` implementada.
 - `ArvoreRubroNegra()`: inicia vazia, com sentinela NIL preta; rotações,
   recolorações e correções são detalhes internos. Implementa `ContratoArvore`,
   inclusive correção após remoção e validação dos invariantes.
 
 As três estruturas preservam referências aos objetos. Seus testes verificam
-operações isoladas e invariantes; a consistência conjunta de cadastros, filas,
-estados e vínculos continua sendo responsabilidade da integração futura.
+operações isoladas e invariantes; os testes do serviço verificam também a
+consistência conjunta de cadastros, filas, estados e vínculos na execução sequencial.
 As complexidades detalhadas, incluindo custos da Hash auxiliar do Heap e dos
 validadores, estão nas docstrings das classes em `atendimentos/structures/`.
 
@@ -270,9 +284,9 @@ entre eles, vence o menor ID. Todas as comparações usam datas com fuso.
 - Rubro-Negra: busca, inserção e remoção O(log n); percurso completo O(n).
 - Validações e geração de listagens são operações separadas e podem percorrer índices.
 
-## Serviço central — planejado
+## Serviço central — implementado em memória
 
-`SistemaAtendimento` recebe/possui as Hashes, os dois heaps e a árvore.
+`SistemaAtendimento` instancia as Hashes, os dois Heaps e a árvore.
 Também controla os geradores de IDs de pacientes, médicos e atendimentos.
 Os contadores são crescentes e nunca são calculados pelo tamanho das filas.
 
@@ -285,20 +299,28 @@ Os contadores são crescentes e nunca são calculados pelo tamanho das filas.
 | `cadastrar_medico(nome, registro)` | `Medico`; gera ID e inclui cadastro e Heap de disponíveis |
 | `buscar_medico(id)` | `Medico` ou `None` |
 | `listar_medicos()` | `list[Medico]`; sem ordem garantida |
-| `chamar_proximo()` | `Atendimento`; indisponibilidade gera `ValueError`, preservando filas |
-| `concluir_atendimento(id)` | `Atendimento` encerrado; não permite conclusão repetida |
-| `cancelar_paciente(id)` | `Paciente` cancelado; se ativo, encerra vínculo e libera médico |
+| `chamar_proximo(inicio=None)` | `Atendimento`; indisponibilidade gera `ValueError`, preservando filas |
+| `concluir_atendimento(id, fim=None)` | `Atendimento` encerrado; não permite conclusão repetida |
+| `cancelar_paciente(id, fim=None)` | `Paciente` cancelado; se ativo, encerra vínculo e libera médico |
 | `listar_atendimentos_ativos()` | `list[Atendimento]` filtrada por Em atendimento |
 | `listar_historico()` | `list[Atendimento]` encerrados, ordenada por início e ID |
 | `listar_chegadas()` | `list[Paciente]` de todos os estados, ordenada por chegada e ID |
-| `obter_indicadores()` | Dados de pacientes por estado e totais concluídos por médico |
-| `validar_indices()` | `None`; inconsistência gera `ValueError` |
+| `obter_indicadores()` | Totais e estados de pacientes, médicos e atendimentos; conclusões por médico |
+| `listar_pacientes()` | `list[Paciente]` de todos os estados, sem ordem garantida |
+| `consultar_proximo_paciente()` | Mínimo clínico ou `None`, sem extração |
+| `consultar_proximo_medico()` | Médico disponível mínimo ou `None`, sem extração |
+
+`validar_indices()` permanece previsto para a integração centralizada; não existe
+como método público nesta etapa. Os testes integrados combinam os validadores das
+estruturas e verificações dos vínculos. Horários omitidos usam o instante atual
+em UTC. O cancelamento em espera valida o horário, mas não cria atendimento.
 
 Operações de alteração com ID inexistente geram `KeyError`; dados ou transições
-inválidas geram `ValueError`. As views traduzem esses erros em mensagens para o
-operador. Erros inesperados não podem ser apresentados como sucesso.
-Os formatos de apresentação de indicadores serão definidos com o front;
-não devem se tornar um cadastro paralelo que substitua os índices.
+inválidas geram `ValueError`. Na integração WEB futura, as views deverão traduzir esses erros em mensagens
+para o operador. Erros inesperados não podem ser apresentados como sucesso.
+Os indicadores retornam totais, contagens por estado e uma lista de conclusões
+por médico. Dicionários auxiliares são apenas saída de apresentação, sem índices
+ou contadores persistentes adicionais. A adaptação ao frontend é futura.
 
 A lista cronológica histórica pode ordenar uma lista auxiliar obtida do cadastro,
 com custo O(n log n), pois os encerrados não estão na árvore de espera. Esse uso
@@ -347,15 +369,15 @@ Concluídos e cancelados não são encerrados novamente.
 ## Diagrama de classes
 
 Abrir `diagrama_classes.drawio` no diagrams.net para editar ou exportar.
-O diagrama apresenta o desenho alvo: Paciente existe; Medico, Atendimento e
-SistemaAtendimento ainda são planejados. As interfaces já estão definidas.
+O diagrama em Markdown apresenta as entidades e o serviço existentes.
+O método `validar_indices()` nele indicado permanece planejado. O arquivo draw.io
+registra o desenho arquitetural e não comprova o estado da implementação.
 Linhas tracejadas representam dependências; linhas contínuas, associações.
 
 ```mermaid
 classDiagram
     direction TB
     class SistemaAtendimento {
-        <<planejado>>
         +cadastrar_paciente()
         +cadastrar_medico()
         +reclassificar_paciente()
@@ -402,7 +424,6 @@ classDiagram
         +cancelar()
     }
     class Medico {
-        <<planejado>>
         +int id
         +str nome
         +str registro
@@ -414,7 +435,6 @@ classDiagram
         +cancelar_atendimento()
     }
     class Atendimento {
-        <<planejado>>
         +int id
         +datetime inicio
         +datetime fim
@@ -440,7 +460,7 @@ mas no máximo um ativo por vez.
 
 - Responsabilidades e dependências definidas acima.
 - Assinaturas, retornos e erros das estruturas registrados em `contratos.py`.
-- Contratos de entidades e do serviço especificados; implementação futura identificada.
+- Contratos de entidades e do serviço especificados; entregas e pendências identificadas.
 - Fonte dos registros, referências compartilhadas e invariantes definidos.
 - Diagrama de classes incluído em Markdown e em formato editável draw.io.
 - A equipe deve revisar o acordo antes de integrar implementações. Não registrar
