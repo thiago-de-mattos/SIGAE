@@ -1,0 +1,13 @@
+<div class="tabela" role="region" aria-label="Conclusões por médico" tabindex="0">
+<table>
+    <caption>Conclusões por médico</caption>
+    <thead><tr><th scope="col">ID</th><th scope="col">Médico</th><th scope="col">Atendimentos concluídos</th></tr></thead>
+    <tbody>
+    {% for medico in medicos %}
+    <tr><td>{{ medico.id }}</td><th scope="row">{{ medico.nome }}</th><td>{{ medico.total }}</td></tr>
+    {% empty %}
+    <tr><td colspan="3" class="vazio">Nenhum médico cadastrado.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>

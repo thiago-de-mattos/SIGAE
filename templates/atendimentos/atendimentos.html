@@ -1,6 +1,31 @@
 {% extends "atendimentos/base.html" %}
-{% block title %}Atendimentos{% endblock %}
+{% block title %}Atendimentos · SIGAE WEB{% endblock %}
 {% block content %}
-<section class="apresentacao"><p class="etiqueta">Protótipos navegáveis · SIGAE-12</p><h1>Atendimentos</h1><p>Acompanhamento dos vínculos ativos. As ações abaixo são somente representações.</p></section>
-<div class="tabela" role="region" aria-label="Atendimento ativo — demonstração" tabindex="0"><table><caption>Atendimento ativo — demonstração</caption><thead><tr><th scope="col">ID</th><th scope="col">Paciente</th><th scope="col">Médico vinculado</th><th scope="col">Status</th><th scope="col">Início (UTC−03:00)</th><th scope="col">Ações</th></tr></thead><tbody><tr><td>203</td><td>103 · Carla Luz</td><td>2 · Rui Paiva</td><td>Em atendimento</td><td>26/11/2026 08:25</td><td><button type="button" disabled>Concluir atendimento</button><button type="button" disabled>Cancelar atendimento</button></td></tr></tbody></table></div><section class="cartao"><h2>Encerramento — comportamento previsto</h2><p>Concluir altera o paciente para Concluído, incrementa uma única vez as conclusões do médico e o libera.</p><p>Cancelar antes da conclusão altera o paciente para Cancelado e libera o médico sem incrementar o contador. Ambos preservam os vínculos no histórico.</p><a href="{% url 'atendimentos:historico' %}">Ver exemplos de registros encerrados</a></section><section class="exemplos"><h2>Estados alternativos — exemplos estáticos</h2><details><summary>Visualizar estado vazio</summary><p class="vazio">Nenhum atendimento em andamento. Consulte a fila para uma nova chamada.</p></details><details><summary>Visualizar mensagens de erro</summary><div class="erro"><strong>Exemplos; nenhum erro real foi provocado.</strong><ul><li>Atendimento não encontrado.</li><li>Este atendimento já foi encerrado; conclusão repetida não é permitida.</li><li>Não foi possível concluir a operação. Nenhuma confirmação de sucesso deve ser exibida.</li></ul></div></details></section>
+<h1>Atendimentos ativos</h1>
+<div class="tabela" role="region" aria-label="Atendimentos ativos" tabindex="0">
+<table>
+    <caption>Atendimentos em execução</caption>
+    <thead><tr><th scope="col">ID</th><th scope="col">Paciente</th><th scope="col">Médico</th><th scope="col">Início</th><th scope="col">Situação</th><th scope="col">Ações</th></tr></thead>
+    <tbody>
+    {% for atendimento in ativos %}
+    <tr>
+        <td>{{ atendimento.id }}</td><th scope="row">{{ atendimento.paciente.nome }}</th><td>{{ atendimento.medico.nome }}</td>
+        <td>{{ atendimento.inicio|date:"d/m/Y H:i" }}</td><td>{{ atendimento.situacao }}</td>
+        <td class="acoes">
+            <form method="post" action="{% url 'atendimentos:acao' 'atendimentos' 'concluir' %}">
+                {% csrf_token %}<input type="hidden" name="id" value="{{ atendimento.id }}">
+                <button aria-label="Concluir atendimento {{ atendimento.id }}">Concluir</button>
+            </form>
+            <form method="post" action="{% url 'atendimentos:acao' 'atendimentos' 'cancelar' %}">
+                {% csrf_token %}<input type="hidden" name="id" value="{{ atendimento.paciente.id }}">
+                <button class="secundario" aria-label="Cancelar atendimento {{ atendimento.id }}">Cancelar</button>
+            </form>
+        </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="vazio">Nenhum atendimento ativo.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
 {% endblock %}

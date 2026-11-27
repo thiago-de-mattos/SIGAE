@@ -84,3 +84,16 @@ summary { cursor: pointer; font-weight: 600; padding: .3rem; }
     .cartao, .exemplos { padding: 1rem; }
     .modulos { grid-template-columns: 1fr; }
 }
+.grade {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+    gap: 1rem;
+}
+.grade .cartao { margin: 0; }
+.cartao h2 { margin-top: 0; }
+button { background: #123b4b; color: #fff; font-weight: 650; cursor: pointer; }
+button:hover:not(:disabled) { background: #235b70; }
+button.secundario { color: #751e31; background: #fff; border-color: #a76b79; }
+button.secundario:hover:not(:disabled) { background: #fff0f2; }
+.acoes form { display: inline-block; }
+.errorlist { color: #8d1527; font-weight: 600; }

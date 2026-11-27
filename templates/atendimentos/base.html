@@ -4,22 +4,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}SIGAE WEB{% endblock %} · Demonstração</title>
+    <title>{% block title %}SIGAE WEB{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/base.css' %}">
 </head>
 <body>
     <a class="pular" href="#conteudo">Pular para o conteúdo</a>
     <header class="cabecalho">
         <a class="marca" href="{% url 'atendimentos:inicio' %}">SIGAE WEB</a>
-        <span>Simulador acadêmico · Protótipo</span>
+        <span>Simulador acadêmico</span>
     </header>
-    <nav aria-label="Módulos"><ul class="navegacao"><li><a href="{% url 'atendimentos:inicio' %}" {% if request.resolver_match.url_name == 'inicio' %}aria-current="page"{% endif %}>Painel geral</a></li><li><a href="{% url 'atendimentos:pacientes' %}" {% if request.resolver_match.url_name == 'pacientes' %}aria-current="page"{% endif %}>Pacientes</a></li><li><a href="{% url 'atendimentos:triagem' %}" {% if request.resolver_match.url_name == 'triagem' %}aria-current="page"{% endif %}>Triagem/Fila</a></li><li><a href="{% url 'atendimentos:medicos' %}" {% if request.resolver_match.url_name == 'medicos' %}aria-current="page"{% endif %}>Médicos</a></li><li><a href="{% url 'atendimentos:atendimentos' %}" {% if request.resolver_match.url_name == 'atendimentos' %}aria-current="page"{% endif %}>Atendimentos</a></li><li><a href="{% url 'atendimentos:historico' %}" {% if request.resolver_match.url_name == 'historico' %}aria-current="page"{% endif %}>Histórico</a></li></ul></nav>
+    <nav aria-label="Módulos"><ul class="navegacao"><li><a href="{% url 'atendimentos:inicio' %}" {% if modulo == 'inicio' %}aria-current="page"{% endif %}>Painel geral</a></li><li><a href="{% url 'atendimentos:pacientes' %}" {% if modulo == 'pacientes' %}aria-current="page"{% endif %}>Pacientes</a></li><li><a href="{% url 'atendimentos:triagem' %}" {% if modulo == 'triagem' %}aria-current="page"{% endif %}>Triagem/Fila</a></li><li><a href="{% url 'atendimentos:medicos' %}" {% if modulo == 'medicos' %}aria-current="page"{% endif %}>Médicos</a></li><li><a href="{% url 'atendimentos:atendimentos' %}" {% if modulo == 'atendimentos' %}aria-current="page"{% endif %}>Atendimentos</a></li><li><a href="{% url 'atendimentos:historico' %}" {% if modulo == 'historico' %}aria-current="page"{% endif %}>Histórico</a></li></ul></nav>
     <main id="conteudo" tabindex="-1">
-        <aside class="aviso" aria-label="Limitações da demonstração"><strong>Demonstração com dados fictícios estáticos.</strong> Nenhuma operação é executada ou salva. Os botões de operação estão desabilitados; apenas a navegação e os exemplos expansíveis funcionam.</aside>
         {% for message in messages %}<p role="status" class="aviso">{{ message }}</p>{% endfor %}
         {% if erro_acao %}<p role="alert" class="erro">{{ erro_acao }}</p>{% endif %}
         {% block content %}{% endblock %}
     </main>
-    <footer>Uso exclusivo como simulador acadêmico. Utilize somente dados fictícios. Retrato ilustrativo de 26/11/2026, às 09:30 (UTC−03:00).</footer>
+    <footer>Uso exclusivo como simulador acadêmico. Utilize somente dados fictícios.</footer>
 </body>
 </html>
