@@ -37,3 +37,50 @@ h2 { font-size: 1.25rem; }
 
 .modulos li { padding: 1.5rem; background: #fff; border: 1px solid #d5dfe5; border-radius: .6rem; }
 footer { max-width: 64rem; margin: 3rem auto; padding: 0 1.5rem; color: #4b606e; font-size: .9rem; }
+
+/* Protótipos SIGAE-12: componentes de leitura e controles sem envio. */
+body { font-size: 1rem; }
+.pular { position: absolute; top: -5rem; left: 1rem; padding: .7rem; background: #fff; z-index: 10; }
+.pular:focus { top: 1rem; }
+.navegacao { display: flex; flex-wrap: wrap; gap: .4rem; list-style: none; margin: 0 auto; padding: 1rem 1.5rem; max-width: 67rem; }
+.navegacao a { display: block; padding: .65rem .8rem; border-radius: .35rem; text-decoration: none; }
+.navegacao a:hover { background: #e0ebf0; }
+.navegacao a[aria-current="page"] { color: #fff; background: #123b4b; font-weight: 700; }
+.aviso { background: #e7f0f5; border-left: .3rem solid #285c77; padding: 1rem; margin-bottom: 2rem; }
+.cartao, .exemplos { background: #fff; border: 1px solid #d5dfe5; border-radius: .6rem; padding: 1.3rem; margin: 1.5rem 0; }
+.indicadores strong { display: block; font-size: 2rem; color: #123b4b; }
+.indicadores span { display: block; }
+fieldset { border: 1px solid #bacbd4; padding: 1rem; min-width: 0; }
+legend { font-weight: 700; padding: 0 .4rem; }
+label { display: block; font-weight: 600; margin-top: 1rem; }
+input, select, button { font: inherit; border: 1px solid #708894; border-radius: .3rem; padding: .65rem; }
+input, select { display: block; width: 100%; max-width: 30rem; margin: .35rem 0 1rem; }
+select { appearance: none; padding-right: 2rem; background-image: linear-gradient(45deg, transparent 50%, #183344 50%), linear-gradient(135deg, #183344 50%, transparent 50%); background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+button { margin: .3rem .4rem .3rem 0; }
+button:disabled, input:disabled, select:disabled { opacity: 1; color: #405765; background-color: #eef2f4; cursor: not-allowed; }
+input::placeholder { color: #506674; opacity: 1; }
+.tabela { overflow-x: auto; margin: 1.5rem 0; border: 1px solid #d5dfe5; border-radius: .4rem; background: white; }
+table { border-collapse: collapse; width: 100%; text-align: left; font-size: .95rem; }
+caption { text-align: left; font-weight: 700; padding: 1rem; }
+th, td { padding: .85rem; border-bottom: 1px solid #d5dfe5; vertical-align: top; }
+th { background: #e7f0f5; }
+td button { white-space: nowrap; }
+.riscos { display: flex; flex-wrap: wrap; list-style: none; padding: 0; gap: .6rem; }
+.risco { padding: .5rem .8rem; border: 1px solid currentColor; border-radius: .3rem; font-weight: 700; }
+.r1 { color: #8d1527; background: #ffe9ed; }
+.r2 { color: #853700; background: #fff0df; }
+.r3 { color: #655000; background: #fff7ce; }
+.r4 { color: #175c3a; background: #e8f5ed; }
+.r5 { color: #164d7c; background: #e8f2fc; }
+details { border-top: 1px solid #d5dfe5; padding: 1rem 0; }
+summary { cursor: pointer; font-weight: 600; padding: .3rem; }
+:focus-visible { outline: 3px solid #9b6100; outline-offset: 4px; }
+.vazio { background: #f0f5f7; padding: 1rem; }
+.erro { background: #fff0f2; border-left: .3rem solid #9d2439; padding: 1rem; margin-top: 1rem; color: #701829; }
+@media (max-width: 40rem) {
+    main { margin: 1.5rem auto; padding: 0 1rem; }
+    .navegacao { padding: .7rem; }
+    .navegacao li { flex: 1 1 9rem; }
+    .cartao, .exemplos { padding: 1rem; }
+    .modulos { grid-template-columns: 1fr; }
+}
