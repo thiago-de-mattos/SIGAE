@@ -1,0 +1,15 @@
+<fieldset class="seletor-risco">
+    <legend>{{ campo.label }}{% if campo.field.required %} <span class="obrigatorio">(obrigatório)</span>{% endif %}</legend>
+    {{ campo.errors }}
+    {% if campo.help_text %}<p class="helptext" id="{{ campo.auto_id }}_helptext">{{ campo.help_text }}</p>{% endif %}
+    <div class="opcoes-risco">
+        {% for valor, texto in campo.field.choices %}
+        {% if valor %}
+        <label class="opcao-risco r{{ valor }}" for="{{ campo.auto_id }}_{{ valor }}">
+            <input type="radio" name="{{ campo.html_name }}" id="{{ campo.auto_id }}_{{ valor }}" value="{{ valor }}"{% if campo.value|stringformat:'s' == valor|stringformat:'s' %} checked{% endif %}{% if campo.field.required %} required{% endif %}{% if campo.errors %} aria-invalid="true" aria-describedby="{{ campo.auto_id }}_error{% if campo.help_text %} {{ campo.auto_id }}_helptext{% endif %}"{% elif campo.help_text %} aria-describedby="{{ campo.auto_id }}_helptext"{% endif %}>
+            <span>{{ texto }}</span>
+        </label>
+        {% endif %}
+        {% endfor %}
+    </div>
+</fieldset>

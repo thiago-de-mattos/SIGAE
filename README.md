@@ -34,7 +34,7 @@ Histórico.
 | --- | --- |
 | `/` | Painel geral e indicadores |
 | `/pacientes/` | Cadastro, consulta por ID e cancelamento |
-| `/triagem/` | Fila, reclassificação e chamada |
+| `/triagem/` | Fila, reclassificação, chamada e cancelamento individual |
 | `/medicos/` | Cadastro, consulta e disponibilidade |
 | `/atendimentos/` | Atendimento ativo, conclusão e cancelamento |
 | `/historico/` | Encerramentos, conclusões por médico e chegadas |
@@ -44,6 +44,16 @@ começam vazios e são perdidos no reinício. Use um único processo com
 `--noreload`. SQLite é usado pelos componentes administrativos do Django.
 Para usar `/admin/`, execute `manage.py migrate` e `manage.py createsuperuser`.
 O simulador funciona localmente sem executar essas duas etapas.
+
+## Interface experimental
+
+A branch `experiment/ux-ui-redesign` mantém os seis módulos com componentes
+compartilhados, sidebar, seleção de risco por radios e painel operacional.
+A identidade usa azul-marinho `#13285C`, verde-menta `#4FCFA2`, fundos brancos
+e bordas `#E2E8F0`, preservando as cores clínicas e de alertas.
+Na Triagem/Fila, o botão Cancelar reutiliza o fluxo de Pacientes e retorna à
+triagem com mensagem e dados atualizados. Detalhes e limitações da apresentação
+estão na [arquitetura](docs/arquitetura.md#interface-da-branch-experimental).
 
 ## Verificação
 
@@ -59,6 +69,11 @@ Para repetir somente a validação integrada da interface:
 ```text
 python manage.py test atendimentos.tests.test_fluxo_web
 ```
+
+A suíte permanente possui **174 testes aprovados** na verificação de 27/11/2026.
+`manage.py check` e `git diff --check` passaram. Os testes adicionais temporários
+da auditoria e as validações pendentes estão no [relatório de entrega](docs/entrega.md#evidências).
+A instalação limpa e a validação em navegador do redesign não foram realizadas.
 
 - [Histórias de usuário](docs/historias.md)
 - [Planejamento XP](docs/planejamento-xp.md)

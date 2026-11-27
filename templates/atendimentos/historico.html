@@ -1,7 +1,7 @@
 {% extends "atendimentos/base.html" %}
 {% block title %}Histórico · SIGAE WEB{% endblock %}
 {% block content %}
-<h1>Histórico</h1>
+<div class="titulo-pagina"><div><p class="sobretitulo">Registros da operação</p><h1>Histórico</h1><p class="descricao">Consulte encerramentos, produção por médico e a sequência de chegadas.</p></div></div>
 <div class="tabela" role="region" aria-label="Atendimentos encerrados" tabindex="0">
 <table>
     <caption>Atendimentos encerrados</caption>
@@ -10,10 +10,10 @@
     {% for atendimento in historico %}
     <tr>
         <td>{{ atendimento.id }}</td><th scope="row">{{ atendimento.paciente.nome }}</th><td>{{ atendimento.medico.nome }}</td>
-        <td>{{ atendimento.inicio|date:"d/m/Y H:i" }}</td><td>{{ atendimento.fim|date:"d/m/Y H:i" }}</td><td>{{ atendimento.situacao }}</td>
+        <td>{{ atendimento.inicio|date:"d/m/Y H:i" }}</td><td>{{ atendimento.fim|date:"d/m/Y H:i" }}</td><td>{% include "atendimentos/partes/situacao.html" with situacao=atendimento.situacao only %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="6" class="vazio">Nenhum atendimento encerrado.</td></tr>
+    <tr><td colspan="6" class="vazio"><strong>Nenhum atendimento encerrado.</strong> Os registros aparecerão aqui após uma conclusão ou um cancelamento.</td></tr>
     {% endfor %}
     </tbody>
 </table>

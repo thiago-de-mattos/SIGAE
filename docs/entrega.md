@@ -1,7 +1,7 @@
 # SIGAE-24 — Relatório técnico e entrega
 
-O SIGAE WEB mantém cadastros e atendimentos em memória e usa três estruturas
-de dados próprias para executar as operações. O roteiro abaixo pode ser
+O SIGAE WEB mantém cadastros e atendimentos em memória e usa três tipos de estruturas
+de dados próprias, com instâncias independentes dos Heaps de pacientes e médicos, para executar as operações. O roteiro abaixo pode ser
 repetido após a instalação indicada no [README](../README.md).
 
 ## Decisões de implementação
@@ -34,11 +34,46 @@ O sistema começa vazio a cada reinício e foi projetado para um único processo
 | HU06–HU08 | `test_encerramento`, `test_indicadores` e `test_fluxo_web` verificam encerramentos, repetição, contadores e histórico. |
 | Estruturas e rollback | `test_tabela_hash`, `test_min_heap`, `test_arvore_rubro_negra` e `test_integracao_servico` verificam colisões, redimensionamento, invariantes e falhas injetadas. |
 
-A suíte completa passou com **164 testes**. O fluxo manual no navegador
-registrou um médico e um paciente fictícios, reclassificou o risco, iniciou
-e concluiu o atendimento. O histórico exibiu o vínculo e uma conclusão para
-o médico. A revisão cega exercitou clientes independentes e verificou que
-um único pedido concorrente iniciou ou concluiu o mesmo atendimento.
+### Suíte permanente — 27/11/2026
+
+Na branch `experiment/ux-ui-redesign`, `python manage.py test` passou com
+**174 testes**; `python manage.py check` não apontou problemas e
+`git diff --check` passou. Além das evidências acima, `test_interface` cobre
+renderização dos seletores, valores após erros e marcação do preenchimento de
+chegada; `test_fluxo_web` cobre cancelamento pela triagem, índices, próxima
+chamada, CSRF, erros e destino interno de retorno. Esses testes não executam
+JavaScript nem substituem validação interativa em navegador.
+
+### Testes adicionais temporários da auditoria
+
+Quatro testes executados somente em memória foram aprovados. Não foram
+adicionados ao repositório e **não integram os 174 testes permanentes**:
+
+| Cenário | Execução e resultado |
+| --- | --- |
+| Sequências aleatórias | Oito sementes, 300 passos cada (2.400 passos), combinando cadastro, reclassificação, chamada e encerramento; conferência de invariantes, vínculos, totais e mínimos com oráculos independentes. |
+| Cadastro concorrente | 120 pacientes em até 12 threads; IDs únicos, referências preservadas e índices válidos. |
+| Corrida de encerramento WEB | 30 disputas entre conclusão e cancelamento; uma resposta 302 e outra 400, um histórico e contador coerente em cada disputa. |
+| Recuperação impossível | Falha injetada na inserção e na compensação; HTTP 503 nas seis telas e em nova chamada, impedindo uso de estado incerto. |
+
+Os scripts temporários não foram persistidos; os resultados acima registram
+esta execução e não são reproduzidos pelo comando da suíte permanente.
+
+### Alcance e pendências
+
+A comparação com `main` local encontrou entidades, estruturas, serviços,
+formulários e dependências inalterados. A mudança de produção no backend é o
+retorno do cancelamento à triagem na view. A revisão do código não encontrou
+bibliotecas prontas substituindo os índices obrigatórios; coleções auxiliares
+servem à apresentação, validação e recuperação.
+
+A implementação visual e suas limitações estão descritas na
+[arquitetura](arquitetura.md#interface-da-branch-experimental). A instalação
+limpa, o comportamento JavaScript, o teclado e a responsividade em navegador
+**não foram validados nesta auditoria**. O relato anterior de teste manual
+referia-se à versão anterior ao redesign e não comprova a interface atual.
+Os testes aprovados não demonstram ausência absoluta de defeitos; a validação
+é limitada ao processo único em memória previsto pelo projeto.
 
 ## Roteiro de defesa
 
@@ -59,6 +94,7 @@ um único pedido concorrente iniciou ou concluiu o mesmo atendimento.
    dependem do registro dos integrantes.
 
 O [planejamento XP](planejamento-xp.md) registra iterações e estimativas.
-O histórico de Git identifica os oito cartões pelos IDs SIGAE. As branches
-foram encadeadas na ordem do Trello. A última, `feature/24-entrega`, reúne
-o fluxo completo.
+O histórico de desenvolvimento registra os cartões SIGAE e a integração
+anterior em `feature/24-entrega`. Esta revisão documenta o estado de trabalho
+da branch `experiment/ux-ui-redesign`, incluindo alterações locais ainda não
+commitadas; não representa uma publicação ou merge.

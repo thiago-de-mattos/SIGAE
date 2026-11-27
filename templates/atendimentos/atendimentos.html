@@ -1,7 +1,8 @@
 {% extends "atendimentos/base.html" %}
 {% block title %}Atendimentos · SIGAE WEB{% endblock %}
 {% block content %}
-<h1>Atendimentos ativos</h1>
+<div class="titulo-pagina"><div><p class="sobretitulo">Assistência em andamento</p><h1>Atendimentos ativos</h1><p class="descricao">Acompanhe os atendimentos em execução e registre seu encerramento.</p></div>
+<a class="botao neutro" href="{% url 'atendimentos:triagem' %}">Ir para a triagem e chamar próximo →</a></div>
 <div class="tabela" role="region" aria-label="Atendimentos ativos" tabindex="0">
 <table>
     <caption>Atendimentos em execução</caption>
@@ -10,20 +11,20 @@
     {% for atendimento in ativos %}
     <tr>
         <td>{{ atendimento.id }}</td><th scope="row">{{ atendimento.paciente.nome }}</th><td>{{ atendimento.medico.nome }}</td>
-        <td>{{ atendimento.inicio|date:"d/m/Y H:i" }}</td><td>{{ atendimento.situacao }}</td>
+        <td>{{ atendimento.inicio|date:"d/m/Y H:i" }}</td><td>{% include "atendimentos/partes/situacao.html" with situacao=atendimento.situacao only %}</td>
         <td class="acoes">
             <form method="post" action="{% url 'atendimentos:acao' 'atendimentos' 'concluir' %}">
                 {% csrf_token %}<input type="hidden" name="id" value="{{ atendimento.id }}">
                 <button aria-label="Concluir atendimento {{ atendimento.id }}">Concluir</button>
             </form>
-            <form method="post" action="{% url 'atendimentos:acao' 'atendimentos' 'cancelar' %}">
+            <form method="post" action="{% url 'atendimentos:acao' 'atendimentos' 'cancelar' %}" data-confirmar="Cancelar o atendimento {{ atendimento.id }} de {{ atendimento.paciente.nome }}?">
                 {% csrf_token %}<input type="hidden" name="id" value="{{ atendimento.id }}">
                 <button class="secundario" aria-label="Cancelar atendimento {{ atendimento.id }}">Cancelar</button>
             </form>
         </td>
     </tr>
     {% empty %}
-    <tr><td colspan="6" class="vazio">Nenhum atendimento ativo.</td></tr>
+    <tr><td colspan="6" class="vazio"><strong>Nenhum atendimento ativo.</strong>Os atendimentos aparecem aqui após a chamada na triagem.</td></tr>
     {% endfor %}
     </tbody>
 </table>

@@ -20,11 +20,45 @@ Os contratos das estruturas usam Protocols definidos em
 | `atendimentos/forms.py` | Conversão e validação das entradas web |
 | `atendimentos/views.py` | Receber requisições, chamar o serviço e renderizar respostas |
 | `templates/atendimentos/` | Templates centralizados |
-| `css/` | Arquivos CSS centralizados na raiz |
+| `css/` | Estilos globais e variáveis da identidade visual |
+| `atendimentos/static/atendimentos/` | JavaScript de apresentação e estilos exclusivos do painel |
 | `atendimentos/tests/` | Testes de entidades, estruturas, integração e interface |
 
 Domínio e estruturas são independentes do Django. As views não manipulam
 índices diretamente.
+
+## Interface da branch experimental
+
+O redesign usa templates Django, CSS próprio e JavaScript sem novas dependências.
+A paleta centralizada em `css/base.css` usa primária `#13285C`, secundária
+`#4FCFA2`, superfícies `#FFFFFF` e bordas `#E2E8F0`. A sidebar usa azul-marinho,
+texto branco e item ativo `#263D70` com destaque menta. Cores de riscos,
+estados, alertas e ações destrutivas permanecem semânticas.
+
+- Cadastro e reclassificação compartilham um seletor de risco com cinco radios
+  nativos, sem pré-seleção, preservando nomes, valores, obrigatoriedade e erros.
+- A chegada é inicializada uma vez no navegador com `America/Sao_Paulo`, apenas
+  no formulário novo vazio. Continua editável; valores enviados, inclusive
+  vazios após erro, não são substituídos. Depende do relógio do dispositivo.
+- O painel apresenta seis indicadores, atalhos, disponibilidade médica,
+  conclusões e chegadas. JavaScript agrega riscos dos aguardando e dimensiona
+  barras de conclusões com dados recebidos, sem selecionar nem ordenar filas.
+  Esses gráficos representam o carregamento da página, não atualização contínua.
+- O contexto do painel não contém a fila da árvore, os mínimos dos Heaps nem a
+  lista de atendimentos ativos. O painel oferece links às telas correspondentes;
+  não reconstrói essas seleções. Sem JavaScript, as contagens de conclusões
+  continuam visíveis e há orientação para consultar os riscos na triagem.
+
+A coluna Ações da Triagem/Fila reutiliza o formulário de cancelamento de
+Pacientes: POST para `/pacientes/cancelar/`, CSRF, ID e confirmação JavaScript.
+O campo `retorno=triagem` só é reconhecido nessa operação e aceita apenas esse
+valor interno. Sucesso redireciona para `/triagem/`; erro de validação renderiza
+Triagem/Fila com HTTP 400, mensagem e contexto atualizado. Falha irrecuperável
+mantém HTTP 503. Sem esse campo, o fluxo de Pacientes permanece igual.
+A view chama o mesmo `cancelar_paciente`; não duplica regras nem altera índices
+diretamente. A confirmação depende de JavaScript; validações e CSRF permanecem
+no servidor. Um paciente já chamado por outro operador segue a regra existente
+de cancelamento de atendimento ativo, sem uma nova regra específica da fila.
 
 ## SIGAE-10 e SIGAE-20 — Estado compartilhado
 

@@ -6,12 +6,13 @@
     {% for p in linhas %}
     <tr>
         <td>{{ p.id }}</td><th scope="row">{{ p.nome }}</th><td>{{ p.chegada|date:"d/m/Y H:i" }}</td>
-        <td>{{ p.risco }}</td><td>{{ p.situacao }}</td>
+        <td>{% include "atendimentos/partes/risco.html" with risco=p.risco only %}</td><td>{% include "atendimentos/partes/situacao.html" with situacao=p.situacao only %}</td>
         {% if cancelar %}
         <td>
             {% if p.situacao == "Aguardando" or p.situacao == "Em atendimento" %}
-                <form method="post" action="{% url 'atendimentos:acao' 'pacientes' 'cancelar' %}">
+                <form method="post" action="{% url 'atendimentos:acao' 'pacientes' 'cancelar' %}" data-confirmar="Cancelar o paciente {{ p.nome }} (ID {{ p.id }})? Se houver atendimento ativo, ele também será cancelado.">
                     {% csrf_token %}<input type="hidden" name="id" value="{{ p.id }}">
+                    {% if retorno == 'triagem' %}<input type="hidden" name="retorno" value="triagem">{% endif %}
                     <button class="secundario" aria-label="Cancelar paciente {{ p.id }}">Cancelar</button>
                 </form>
             {% else %}—{% endif %}
@@ -19,7 +20,7 @@
         {% endif %}
     </tr>
     {% empty %}
-    <tr><td colspan="{% if cancelar %}6{% else %}5{% endif %}" class="vazio">Nenhum paciente.</td></tr>
+    <tr><td colspan="{% if cancelar %}6{% else %}5{% endif %}" class="vazio"><strong>Nenhum paciente.</strong> <a href="{% url 'atendimentos:pacientes' %}#cadastro">Cadastrar paciente</a></td></tr>
     {% endfor %}
     </tbody>
 </table>

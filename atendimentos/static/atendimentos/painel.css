@@ -1,0 +1,38 @@
+/* Estilos exclusivos do Painel Geral. */
+.painel-operacoes .resumo-operacional { grid-template-columns: repeat(6, minmax(0, 1fr)); margin-bottom: 16px; }
+.painel-operacoes .resumo-operacional li { padding: 16px; border-bottom: 0; }
+.painel-operacoes .resumo-operacional span { font-size: .8rem; }
+.atalhos-operacionais { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.atalhos-operacionais a { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 12px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 6px; color: var(--suave); text-decoration: none; font-size: .85rem; }
+.atalhos-operacionais a:hover { color: var(--azul); border-color: var(--azul); }
+.operacao-grid, .analise-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; margin-bottom: 20px; }
+.painel-operacoes .cartao h2 { margin-bottom: 10px; }
+.painel-operacoes .vazio { padding: 18px; }
+.linha-risco { display: grid; grid-template-columns: 145px minmax(32px, 1fr) 80px; gap: 12px; align-items: center; margin: 12px 0; }
+.total-risco { text-align: right; font-size: .8rem; color: var(--suave); font-variant-numeric: tabular-nums; }
+.trilho-risco, .trilho-conclusoes { height: 6px; border-radius: 4px; overflow: hidden; }
+.trilho-risco > span, .trilho-conclusoes > span { display: block; height: 100%; background: currentColor; }
+.lista-equipe { list-style: none; margin: 0 0 16px; padding: 0; }
+.lista-equipe li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--borda); }
+.lista-equipe strong { font-size: .9rem; font-weight: 550; overflow-wrap: anywhere; }
+.lista-equipe small { display: block; color: var(--suave); overflow-wrap: anywhere; }
+.conclusao-visual { display: flex; gap: 16px; align-items: center; }
+.conclusao-visual strong { min-width: 2ch; font-variant-numeric: tabular-nums; }
+.trilho-conclusoes { flex: 1; max-width: 320px; background: var(--borda); color: var(--secundaria); }
+.ativos-painel { margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.ativos-painel .ajuda { margin: 0; }
+.painel-operacoes [hidden] { display: none; }
+@media (max-width: 1200px) {
+    .painel-operacoes .resumo-operacional { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .painel-operacoes .resumo-operacional li:nth-child(n+4) { border-top: 1px solid var(--borda); }
+    .analise-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+    .operacao-grid { grid-template-columns: 1fr; }
+    .painel-operacoes .resumo-operacional { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .painel-operacoes .resumo-operacional li:nth-child(n+3) { border-top: 1px solid var(--borda); }
+    .linha-risco { grid-template-columns: minmax(0, 1fr) 80px; gap: 6px; }
+    .trilho-risco { grid-column: 1; grid-row: 2; }
+    .total-risco { grid-column: 2; grid-row: 1 / 3; }
+    .lista-equipe li { flex-wrap: wrap; }
+}
