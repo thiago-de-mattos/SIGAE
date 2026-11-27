@@ -11,7 +11,7 @@ from atendimentos.structures.tabela_hash import TabelaHash
 
 
 class SistemaAtendimento:
-    """Base e cadastros das etapas SIGAE-19.3/19.4.
+    """Base, cadastros e reclassificação das etapas SIGAE-19.3 a SIGAE-19.5.
 
     Estruturas são internas: as views não devem acessá-las diretamente.
     IDs são únicos por tipo e por instância, reservados em sequência a partir
@@ -101,6 +101,35 @@ class SistemaAtendimento:
 
     def buscar_paciente(self, id: int) -> Paciente | None:
         return self._pacientes.buscar(id)
+
+    def reclassificar_paciente(self, id: int, prioridade: int) -> Paciente:
+        """Reclassifica a mesma entidade e reorganiza somente seu Heap.
+
+        Consulta na Hash O(1) esperada, O(N) no pior caso (N cadastrados).
+        Atualização O(log(n+1)) esperada, O(n log(n+1)) no pior caso devido
+        às colisões da Hash de posições (n em espera). Espaço auxiliar O(1).
+        A compensação repete a atualização, mantendo os mesmos limites.
+        Pressupõe índice recuperável pela API; falhas de recuperação são explícitas.
+        """
+        paciente = self._pacientes.buscar(id)
+        if paciente is None:
+            raise KeyError(id)
+        anterior = paciente.prioridade
+        # A entidade rejeita prioridade/estado inválidos antes de qualquer mutação.
+        paciente.reclassificar(prioridade)
+        try:
+            self._heap_pacientes.atualizar(id)
+        except Exception as erro:
+            try:
+                paciente.reclassificar(anterior)
+                self._heap_pacientes.atualizar(id)
+            except Exception as recuperacao:
+                raise ExceptionGroup(
+                    "Falha na reclassificação e na compensação local.",
+                    [erro, recuperacao],
+                ) from erro
+            raise
+        return paciente
 
     def buscar_medico(self, id: int) -> Medico | None:
         return self._medicos.buscar(id)
