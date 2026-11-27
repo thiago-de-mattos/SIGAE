@@ -2,32 +2,11 @@
 
 ## Escopo e estado da implementação
 
-Este documento define as interfaces e responsabilidades para o SIGAE WEB.
-Não representa a implementação completa do sistema.
-
-- Existentes: base Django, entidades `Paciente`, `Medico` e `Atendimento`,
-  `TabelaHash`, `MinHeap`, `ArvoreRubroNegra` e `SistemaAtendimento`. O serviço
-  coordena entidades e estruturas em memória, independentemente das views.
-- Interface existente: seis protótipos navegáveis — Painel geral, Pacientes,
-  Triagem/Fila, Médicos, Atendimentos e Histórico — com dados fictícios estáticos,
-  views somente GET e ações de negócio desabilitadas. Telas, URLs, limitações e
-  revisão pendente estão em [prototipos.md](prototipos.md).
-- Contratos: `Identificavel`, `ContratoHash`, `ContratoHeap` e `ContratoArvore`
-  em `atendimentos/contratos.py` (Protocols do Python).
-- Implementados no serviço: IDs, cadastros, consultas, triagem no cadastro,
-  reclassificação, chamada, distribuição médica, conclusão, cancelamento,
-  históricos e indicadores, com compensação local em caso de falha.
-- Pendentes: formulários e integração das operações com a interface WEB.
-- SIGAE-20: instância compartilhada entre requisições, concorrência, locks,
-  rollback centralizado e indisponibilidade após falha de recuperação.
-- Validação da SIGAE-19: 160 testes aprovados, incluindo três novos cenários
-  integrados da SIGAE-19.9 sobre os 157 testes anteriores. Validam fluxo,
-  distribuição, referências, invariantes, colisões, redimensionamentos e
-  recuperação local; não comprovam concorrência ou integração WEB.
-
-Um Protocol descreve métodos e tipos para análise estática. Não implementa
-algoritmos, não verifica regras de negócio em execução e não exige herança
-explícita. Os testes das implementações verificam os comportamentos no recorte existente.
+O sistema integra seis módulos Django ao serviço em memória. As views
+validam entradas com formulários, acionam o serviço e entregam valores de
+apresentação aos templates. O serviço coordena entidades e estruturas próprias.
+Os contratos das estruturas usam Protocols definidos em
+[atendimentos/contratos.py](../atendimentos/contratos.py).
 
 ## Organização dos arquivos
 
@@ -38,49 +17,34 @@ explícita. Os testes das implementações verificam os comportamentos no recort
 | `atendimentos/structures/` | Hash, Heap e Rubro-Negra implementados pela equipe |
 | `atendimentos/services/` | Operações de negócio, coordenação de índices e recuperação de falhas |
 | `atendimentos/contratos.py` | Interfaces das estruturas |
-| `atendimentos/forms.py` | Conversão e validação das entradas web; arquivo futuro |
+| `atendimentos/forms.py` | Conversão e validação das entradas web |
 | `atendimentos/views.py` | Receber requisições, chamar o serviço e renderizar respostas |
 | `templates/atendimentos/` | Templates centralizados |
 | `css/` | Arquivos CSS centralizados na raiz |
 | `atendimentos/tests/` | Testes de entidades, estruturas, integração e interface |
 
-As views atuais apenas renderizam os protótipos e não alteram entidades ou índices.
-O serviço já controla as operações completas em execução sequencial; a integração
-com as views é futura. Domínio e
-estruturas não importam views, formulários ou modelos do Django. O serviço não
-deverá ser recriado com filas vazias a cada requisição; sua instância seguirá a
-estratégia em memória da SIGAE-10 abaixo, sem persistência.
+Domínio e estruturas são independentes do Django. As views não manipulam
+índices diretamente.
 
-## SIGAE-10 — Estado em memória e acesso entre requisições
-
-A SIGAE-19 mantém o estado enquanto a instância do serviço existir; instâncias
-separadas possuem índices e contadores independentes. As compensações locais
-restauram valores nas entidades originais e recompõem índices recuperáveis pelas
-APIs existentes. IDs reservados não são reutilizados. Falhas de recuperação são
-propagadas por `ExceptionGroup`, sem bloqueio automático do serviço. O provedor,
-os locks e o mecanismo centralizado descritos a seguir são pendências da SIGAE-20.
+## SIGAE-10 e SIGAE-20 — Estado compartilhado
 
 ### Ciclo de vida e acesso pelas views
 
 O sistema executará em um único processo servidor, com uma instância de
 `SistemaAtendimento` compartilhada por todas as requisições e usuários desse
 processo. O estado não pertence à sessão de navegador nem à instância de uma view.
-Um provedor futuro em `atendimentos/services/estado.py` oferecerá
-`obter_sistema()`, criando a instância uma única vez, sob lock de inicialização,
-e retornando sempre a mesma referência. A instância só será publicada depois
+O provedor `obter_sistema()`, em `atendimentos/services/estado.py`, cria a
+instância uma única vez sob lock de inicialização e retorna sempre a mesma referência. A instância só será publicada depois
 de sua construção completa; falha de inicialização não publicará estado parcial.
 
-As views importarão esse provedor, obterão o serviço e chamarão suas operações.
-Não construirão serviços por requisição nem acessarão diretamente as estruturas.
-O serviço manterá um `threading.RLock` único para proteger leituras e alterações;
+As views obtêm o serviço no provedor e chamam suas operações.
+O serviço mantém um `threading.RLock` único para proteger leituras e alterações;
 métodos compostos manterão esse lock durante toda a operação, inclusive rollback.
 A reentrância permite chamadas internas protegidas sem adquirir um segundo lock
 para o mesmo estado. O lock de inicialização não será usado nas operações de negócio.
 
-Para renderização, o serviço oferecerá um contexto de leitura protegido pelo
-mesmo lock. Dentro dele, a view consultará os métodos existentes e materializará
-os campos necessários em valores de apresentação, sem guardar referências
-mutáveis para leitura posterior. A renderização ocorrerá após liberar o lock.
+Para renderização, o serviço oferece `leitura()`, protegido pelo mesmo lock.
+A view materializa valores de apresentação sob o lock e renderiza após liberá-lo.
 As listas retornadas pelas estruturas continuam contendo referências, conforme
 os contratos; copiar apenas a lista não constitui uma fotografia dos seus campos.
 Valores auxiliares de apresentação não serão cadastros nem índices alternativos.
@@ -117,16 +81,11 @@ Cadastro, reclassificação, chamada, conclusão e cancelamento deverão seguir:
    novas operações e consultas de negócio; não continuar usando estado incerto
    nem apresentar sucesso. Registrar a falha para diagnóstico.
 
-O lock impede interferência concorrente, mas não desfaz alterações sozinho.
-Na integração das estruturas existentes, deverá ser garantido que falhas em uma
-mutação sejam recuperáveis, inclusive quando ocorram antes de o método retornar.
-Os Protocols atuais não oferecem transações nem restauração de entidades.
-A recuperação local está implementada na SIGAE-19; a coordenação sob lock e o
-rollback centralizado permanecem para a SIGAE-20, preservando os contratos. Restaurar estado
-não significa executar transições de negócio proibidas nem substituir entidades
-por cópias independentes. Os testes existentes injetam falhas entre etapas e
-verificam invariantes e identidade das referências. Testes de comportamento
-concorrente permanecem futuros.
+O serviço coordena a compensação dos passos tentados em ordem inversa. As
+operações registram os valores anteriores e as compensações antes de chamar
+uma mutação. Após compensar, `validar_indices()` confere as estruturas e as
+regras de consistência. A validação permanece na trilha de falha e nos testes,
+preservando o custo das operações normais.
 
 ### Limitações e compatibilidade
 
@@ -145,9 +104,6 @@ concorrente permanecem futuros.
   domínio independente do Django, estruturas próprias, contratos e coordenação
   centralizada. Persistência e distribuição entre processos exigiriam outra
   estratégia futura e não fazem parte desta entrega.
-
-A SIGAE-10 documenta essas decisões; não implementa o provedor, locks, serviço,
-estruturas, rollback ou persistência, nem declara comprovados seus testes futuros.
 
 ## Entidades
 
@@ -268,7 +224,8 @@ consistência conjunta de cadastros, filas, estados e vínculos na execução se
 As complexidades detalhadas, incluindo custos da Hash auxiliar do Heap e dos
 validadores, estão nas docstrings das classes em `atendimentos/structures/`.
 
-Critério de pacientes: `(prioridade, chegada, id)`; menor valor vence.
+O Heap prioriza `(prioridade, chegada em UTC, id)`. O índice cronológico usa
+`(chegada em UTC, id)`. A entidade preserva a chegada com o fuso original.
 Critério de médicos: `(total_concluidos, ultima_atribuicao_ou_minimo, id)`.
 Para nunca atribuídos, usar uma data sentinela anterior às atribuições válidas,
 com fuso UTC. Assim, com contadores iguais, nunca atribuídos precedem os demais;
@@ -301,6 +258,7 @@ Os contadores são crescentes e nunca são calculados pelo tamanho das filas.
 | `listar_medicos()` | `list[Medico]`; sem ordem garantida |
 | `chamar_proximo(inicio=None)` | `Atendimento`; indisponibilidade gera `ValueError`, preservando filas |
 | `concluir_atendimento(id, fim=None)` | `Atendimento` encerrado; não permite conclusão repetida |
+| `cancelar_atendimento(id, fim=None)` | Cancela atendimento ativo pelo seu ID e libera o médico sem incrementar conclusões |
 | `cancelar_paciente(id, fim=None)` | `Paciente` cancelado; se ativo, encerra vínculo e libera médico |
 | `listar_atendimentos_ativos()` | `list[Atendimento]` filtrada por Em atendimento |
 | `listar_historico()` | `list[Atendimento]` encerrados, ordenada por início e ID |
@@ -310,17 +268,13 @@ Os contadores são crescentes e nunca são calculados pelo tamanho das filas.
 | `consultar_proximo_paciente()` | Mínimo clínico ou `None`, sem extração |
 | `consultar_proximo_medico()` | Médico disponível mínimo ou `None`, sem extração |
 
-`validar_indices()` permanece previsto para a integração centralizada; não existe
-como método público nesta etapa. Os testes integrados combinam os validadores das
-estruturas e verificações dos vínculos. Horários omitidos usam o instante atual
-em UTC. O cancelamento em espera valida o horário, mas não cria atendimento.
+`validar_indices()` verifica estruturas, cadastros elegíveis, vínculos ativos
+e totais de conclusões. O início e o fim omitidos usam o instante atual em UTC.
+O cancelamento em espera valida o horário e preserva o registro no cadastro.
 
-Operações de alteração com ID inexistente geram `KeyError`; dados ou transições
-inválidas geram `ValueError`. Na integração WEB futura, as views deverão traduzir esses erros em mensagens
-para o operador. Erros inesperados não podem ser apresentados como sucesso.
-Os indicadores retornam totais, contagens por estado e uma lista de conclusões
-por médico. Dicionários auxiliares são apenas saída de apresentação, sem índices
-ou contadores persistentes adicionais. A adaptação ao frontend é futura.
+As views traduzem `KeyError` e `ValueError` em mensagens para o operador.
+Os indicadores agregam contagens por estado e conclusões por médico a partir
+dos registros do serviço.
 
 A lista cronológica histórica pode ordenar uma lista auxiliar obtida do cadastro,
 com custo O(n log n), pois os encerrados não estão na árvore de espera. Esse uso
@@ -338,6 +292,7 @@ registro e índices se uma etapa falhar.
 ### Chamada
 
 Dentro de uma operação protegida contra concorrência, verificar ambas as filas.
+Validar que o início tenha fuso e seja igual ou posterior à chegada.
 Selecionar o paciente prioritário e o médico elegível, remover o paciente dos
 índices de espera e o médico do Heap de disponíveis, atualizar as situações e
 registrar o atendimento. Sem médico, nada sai da fila. Uma falha intermediária
@@ -368,10 +323,7 @@ Concluídos e cancelados não são encerrados novamente.
 
 ## Diagrama de classes
 
-Abrir `diagrama_classes.drawio` no diagrams.net para editar ou exportar.
-O diagrama em Markdown apresenta as entidades e o serviço existentes.
-O método `validar_indices()` nele indicado permanece planejado. O arquivo draw.io
-registra o desenho arquitetural e não comprova o estado da implementação.
+O diagrama apresenta as entidades, as estruturas e o serviço central.
 Linhas tracejadas representam dependências; linhas contínuas, associações.
 
 ```mermaid
@@ -383,6 +335,7 @@ classDiagram
         +reclassificar_paciente()
         +chamar_proximo()
         +concluir_atendimento()
+        +cancelar_atendimento()
         +cancelar_paciente()
         +validar_indices()
     }
@@ -462,7 +415,7 @@ mas no máximo um ativo por vez.
 - Assinaturas, retornos e erros das estruturas registrados em `contratos.py`.
 - Contratos de entidades e do serviço especificados; entregas e pendências identificadas.
 - Fonte dos registros, referências compartilhadas e invariantes definidos.
-- Diagrama de classes incluído em Markdown e em formato editável draw.io.
+- Diagrama de classes incluído em Markdown.
 - A equipe deve revisar o acordo antes de integrar implementações. Não registrar
   essa revisão como realizada sem que os integrantes a tenham feito.
 

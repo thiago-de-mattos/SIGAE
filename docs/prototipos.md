@@ -3,6 +3,9 @@
 Referências: [escopo oficial](escopo.md) e [arquitetura](arquitetura.md).
 Esta entrega representa a interface; não implementa operações de negócio.
 
+As informações abaixo registram a entrega histórica da SIGAE-12. A interface
+funcional que a substituiu está descrita no [relatório de entrega](entrega.md).
+
 ## Visualização e telas
 
 Com o ambiente existente, executar `python manage.py runserver --noreload`.
