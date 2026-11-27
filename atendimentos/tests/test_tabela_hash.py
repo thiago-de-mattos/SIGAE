@@ -36,7 +36,7 @@ class TabelaHashTests(TestCase):
         self.assertEqual(tabela.buscar(1).prioridade, 1)
 
     def test_colisoes_usam_modulo_e_encadeamento_separado(self):
-        tabela = TabelaHash[object](capacidade=3)
+        tabela = TabelaHash[object](capacidade=3, fator_carga_maximo=2)
         valores = [object(), object(), object()]
         for chave, valor in zip((1, 4, 7), valores):
             tabela.inserir(chave, valor)
@@ -48,7 +48,7 @@ class TabelaHashTests(TestCase):
         self.assertIsNone(tabela.buscar(2))
 
     def test_chaves_repetidas_nao_substituem_nem_alteram_quantidade(self):
-        tabela = TabelaHash[object](capacidade=1)
+        tabela = TabelaHash[object](capacidade=1, fator_carga_maximo=4)
         valores = [object(), object(), object()]
         for chave, valor in enumerate(valores, start=1):
             tabela.inserir(chave, valor)
@@ -96,3 +96,135 @@ class TabelaHashTests(TestCase):
         primeira.inserir(1, "Ana")
         self.assertIsNone(segunda.buscar(1))
         self.assertEqual(len(segunda), 0)
+
+    def test_remove_inicio_meio_e_fim_de_bucket_com_colisoes(self):
+        for removida in (1, 12, 23):
+            with self.subTest(removida=removida):
+                tabela = TabelaHash[object]()
+                registros = [(chave, object()) for chave in (1, 12, 23)]
+                for chave, valor in registros:
+                    tabela.inserir(chave, valor)
+                for chave, valor in registros:
+                    if chave == removida:
+                        self.assertIs(tabela.remover(chave), valor)
+                self.assertEqual(len(tabela), 2)
+                self.assertIsNone(tabela.buscar(removida))
+                for chave, valor in registros:
+                    if chave != removida:
+                        self.assertIs(tabela.buscar(chave), valor)
+
+    def test_remove_todos_e_reinsere_chave(self):
+        tabela = TabelaHash[int]()
+        tabela.inserir(1, 0)
+        self.assertEqual(tabela.remover(1), 0)
+        self.assertEqual(len(tabela), 0)
+        self.assertEqual(tabela.listar_valores(), [])
+        with self.assertRaises(KeyError):
+            tabela.remover(1)
+        tabela.inserir(1, 10)
+        self.assertEqual(tabela.buscar(1), 10)
+        self.assertEqual(len(tabela), 1)
+
+    def test_remocao_e_atualizacao_ausentes_preservam_registros(self):
+        tabela = TabelaHash[object]()
+        original = object()
+        tabela.inserir(1, original)
+        for chave in (12, 2):
+            with self.subTest(chave=chave):
+                with self.assertRaises(KeyError) as erro:
+                    tabela.remover(chave)
+                self.assertEqual(erro.exception.args, (chave,))
+                with self.assertRaises(KeyError):
+                    tabela.atualizar(chave, object())
+        self.assertEqual(len(tabela), 1)
+        self.assertIs(tabela.buscar(1), original)
+
+    def test_atualiza_referencia_em_bucket_com_colisoes(self):
+        tabela = TabelaHash[object]()
+        registros = [(chave, object()) for chave in (1, 12, 23)]
+        for chave, valor in registros:
+            tabela.inserir(chave, valor)
+        novo = []
+        self.assertIsNone(tabela.atualizar(12, novo))
+        self.assertIs(tabela.buscar(12), novo)
+        self.assertIs(tabela.buscar(1), registros[0][1])
+        self.assertIs(tabela.buscar(23), registros[2][1])
+        self.assertEqual(len(tabela), 3)
+        self.assertEqual(tabela._capacidade, 11)
+
+    def test_novas_operacoes_rejeitam_entradas_invalidas(self):
+        tabela = TabelaHash[int]()
+        tabela.inserir(1, 0)
+        for chave in (True, 1.0, "1", None, []):
+            with self.subTest(chave=chave):
+                with self.assertRaises(ValueError):
+                    tabela.remover(chave)
+                with self.assertRaises(ValueError):
+                    tabela.atualizar(chave, 2)
+        with self.assertRaises(ValueError):
+            tabela.atualizar(1, None)
+        self.assertEqual(tabela.buscar(1), 0)
+        self.assertEqual(len(tabela), 1)
+
+    def test_listagem_independente_com_referencias_compartilhadas(self):
+        tabela = TabelaHash[list[int]]()
+        self.assertEqual(tabela.listar_valores(), [])
+        valores = [[1], [2], [3]]
+        for chave, valor in zip((1, 12, 2), valores):
+            tabela.inserir(chave, valor)
+        listagem = tabela.listar_valores()
+        self.assertEqual(len(listagem), 3)
+        for valor in valores:
+            self.assertTrue(any(item is valor for item in listagem))
+        listagem[0].append(10)
+        self.assertTrue(any(10 in valor for valor in tabela.listar_valores()))
+        listagem.clear()
+        self.assertEqual(len(tabela), 3)
+        self.assertEqual(len(tabela.listar_valores()), 3)
+
+    def test_redimensiona_somente_ao_ultrapassar_limite(self):
+        tabela = TabelaHash[object](capacidade=4)
+        for chave in (1, 5, 9):
+            tabela.inserir(chave, object())
+        self.assertEqual(tabela._capacidade, 4)
+        with self.assertRaises(ValueError):
+            tabela.inserir(1, object())
+        with self.assertRaises(ValueError):
+            tabela.inserir(13, None)
+        tabela.atualizar(1, object())
+        self.assertEqual(tabela._capacidade, 4)
+        tabela.inserir(13, object())
+        self.assertEqual(tabela._capacidade, 8)
+        self.assertEqual(len(tabela), 4)
+
+    def test_fator_configurado_pode_exigir_varias_duplicacoes(self):
+        tabela = TabelaHash[str](capacidade=1, fator_carga_maximo=0.1)
+        tabela.inserir(1, "Ana")
+        self.assertEqual(tabela._capacidade, 16)
+        self.assertLessEqual(len(tabela) / tabela._capacidade, 0.1)
+        self.assertEqual(tabela.buscar(1), "Ana")
+
+    def test_multiplos_redimensionamentos_preservam_registros_e_identidade(self):
+        tabela = TabelaHash[object]()
+        registros = [(chave * 11, object()) for chave in range(100)]
+        capacidades = [tabela._capacidade]
+        for quantidade, (chave, valor) in enumerate(registros, start=1):
+            tabela.inserir(chave, valor)
+            self.assertEqual(len(tabela), quantidade)
+            self.assertLessEqual(quantidade / tabela._capacidade, 0.75)
+            if tabela._capacidade != capacidades[-1]:
+                capacidades.append(tabela._capacidade)
+            for anterior, referencia in registros[:quantidade]:
+                self.assertIs(tabela.buscar(anterior), referencia)
+        self.assertGreater(len(capacidades), 2)
+        self.assertEqual(len(tabela.listar_valores()), 100)
+        for indice, bucket in enumerate(tabela._buckets):
+            for chave, _ in bucket:
+                self.assertEqual(chave % tabela._capacidade, indice)
+        capacidade = tabela._capacidade
+        for chave, valor in registros[::2]:
+            self.assertIs(tabela.remover(chave), valor)
+        self.assertEqual(len(tabela), 50)
+        self.assertEqual(tabela._capacidade, capacidade)
+        for chave, valor in registros[1::2]:
+            self.assertIs(tabela.buscar(chave), valor)
