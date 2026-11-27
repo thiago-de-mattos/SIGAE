@@ -34,7 +34,7 @@ O sistema começa vazio a cada reinício e foi projetado para um único processo
 | HU06–HU08 | `test_encerramento`, `test_indicadores` e `test_fluxo_web` verificam encerramentos, repetição, contadores e histórico. |
 | Estruturas e rollback | `test_tabela_hash`, `test_min_heap`, `test_arvore_rubro_negra` e `test_integracao_servico` verificam colisões, redimensionamento, invariantes e falhas injetadas. |
 
-A suíte completa passou com **164 testes**. O fluxo manual no navegador
+A suíte completa passou com **168 testes**. O fluxo manual no navegador
 registrou um médico e um paciente fictícios, reclassificou o risco, iniciou
 e concluiu o atendimento. O histórico exibiu o vínculo e uma conclusão para
 o médico. A revisão cega exercitou clientes independentes e verificou que
@@ -48,13 +48,20 @@ um único pedido concorrente iniciou ou concluiu o mesmo atendimento.
 2. Reclassifique o último paciente para risco 1. Faça três chamadas. Ele
    deve sair primeiro, seguido pelos dois de risco 2 em ordem de ID. Cada
    médico recebe um paciente pela ordem de ID, pois está no primeiro turno.
-3. Com todos ocupados, confira que o quarto paciente permanece na fila.
-   Conclua o atendimento de Alfa e cancele o de Beta. Faça nova chamada e
-   confira que Beta recebe o quarto paciente, pois tem menos conclusões.
-4. Confira as situações no Painel e os vínculos no Histórico. Execute
-   `python manage.py test atendimentos.tests.test_tabela_hash atendimentos.tests.test_arvore_rubro_negra`
-   para demonstrar colisões, redimensionamento, inserções e remoções.
-5. Na defesa, cada integrante explica a estrutura em que trabalhou e a
+3. Com todos ocupados, volte à Triagem/Fila. A chamada fica desabilitada e
+   o paciente de risco 5 continua aguardando. Conclua o atendimento de Alfa
+   e cancele o de Beta. Faça outra chamada. Beta recebe o paciente de risco
+   5 porque tem zero conclusões e Alfa tem uma.
+4. Cancele os atendimentos ativos de Gama e Beta. Cadastre mais um paciente
+   e chame-o. Gama e Beta têm zero conclusões. Gama vence porque sua última
+   atribuição foi anterior à de Beta, mesmo tendo um ID maior. Confira o
+   vínculo ativo em Atendimentos e os encerramentos no Histórico.
+5. Execute `python manage.py test atendimentos.tests.test_tabela_hash --verbosity 2`
+   para demonstrar colisões e redimensionamento. Mostre no teste as duas
+   chaves no mesmo bucket e a consulta de cada registro. Para as rotações,
+   remoções e invariantes, execute
+   `python manage.py test atendimentos.tests.test_arvore_rubro_negra --verbosity 2`.
+6. Na defesa, cada integrante explica a estrutura em que trabalhou e a
    participação nas duplas. Os nomes, datas e a retrospectiva real do grupo
    dependem do registro dos integrantes.
 
